@@ -51,13 +51,26 @@ def signup(payload: SignupRequest):
 
 @router.post("/login", response_model=Dict[str, Any])
 def login(payload: LoginRequest):
-    user = authenticate_user(payload.email, payload.password)
-    public = public_user(user)
-    return {
-        "access_token": create_access_token(user),
-        "token_type": "bearer",
-        "user": public,
-    }
+    try:
+        user = authenticate_user(payload.email, payload.password)
+        public = public_user(user)
+        return {
+            "access_token": create_access_token(user),
+            "token_type": "bearer",
+            "user": public,
+        }
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Login service is not configured correctly: {exc}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login failed on backend: {type(exc).__name__}",
+        ) from exc
 
 
 @router.get("/me", response_model=Dict[str, Any])
