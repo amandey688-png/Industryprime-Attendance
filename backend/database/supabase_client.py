@@ -75,7 +75,10 @@ def _env(name: str) -> str:
 
 class SupabaseRest:
     def __init__(self, url: str, apikey: str, bearer_token: str):
-        self.rest_base = url.rstrip("/") + "/rest/v1"
+        clean_url = url.strip().rstrip("/")
+        if clean_url.endswith("/rest/v1"):
+            clean_url = clean_url[: -len("/rest/v1")]
+        self.rest_base = clean_url + "/rest/v1"
         self.headers = {
             "apikey": apikey,
             "Authorization": f"Bearer {bearer_token}",
