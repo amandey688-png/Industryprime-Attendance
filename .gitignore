@@ -12,3 +12,4 @@ web/.git.disabled/
 .env
 .env.*
 !.env.example
+!web/.env.example
