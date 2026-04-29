@@ -41,7 +41,7 @@ async function authRequest<T>(path: string, init: RequestInit): Promise<T> {
     });
   } catch {
     throw new Error(
-      `Cannot reach FastAPI at ${API_BASE}. Check that the backend server is running on the same port.`
+      `Cannot reach FastAPI at ${API_BASE}. Check NEXT_PUBLIC_API_URL, backend deployment status, and CORS settings.`
     );
   }
   const body = await res.json().catch(() => null);

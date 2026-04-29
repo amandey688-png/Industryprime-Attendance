@@ -24,6 +24,7 @@ from routers.employees import router as employees_router
 from routers.leave import router as leave_router
 from routers.payroll import router as payroll_router
 from routers.auth import router as auth_router
+from routers.auth import LoginRequest, login as auth_login
 from routers.months import router as months_router
 
 app = FastAPI(
@@ -50,6 +51,7 @@ if _frontend_url:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[*_default_cors_origins, *_env_cors_origins],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -67,6 +69,16 @@ app.include_router(months_router, prefix="/months", tags=["months"])
 @app.get("/")
 def root():
     return {"message": "API is running"}
+
+
+@app.get("/login")
+def login_probe():
+    return {"message": "login endpoint is ready", "method": "POST"}
+
+
+@app.post("/login")
+def login_alias(payload: LoginRequest):
+    return auth_login(payload)
 
 
 @app.get("/health")
