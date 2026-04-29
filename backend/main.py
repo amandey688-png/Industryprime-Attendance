@@ -35,6 +35,7 @@ app = FastAPI(
 _default_cors_origins = [
     "http://127.0.0.1:3000",
     "http://localhost:3000",
+    "https://industryprime-attendance.vercel.app",
 ]
 _env_cors_origins = [
     origin.strip().rstrip("/")
