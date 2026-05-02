@@ -15,9 +15,8 @@ type Props = {
 };
 
 function dateCellValue(d: MonthRow["date"]): string {
-  if (typeof d === "string") return d.slice(0, 10);
-  if (d instanceof Date) return d.toISOString().slice(0, 10);
-  return String(d).slice(0, 10);
+  const s = String(d).trim();
+  return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
 export default function AttendanceEntryMonthTable({ rows, loading, title, onEditRow }: Props) {
