@@ -139,12 +139,7 @@ function Inner() {
       setError("Select a user first, then click Edit on a row.");
       return;
     }
-    const d =
-      typeof row.date === "string"
-        ? row.date.slice(0, 10)
-        : row.date instanceof Date
-          ? row.date.toISOString().slice(0, 10)
-          : String(row.date).slice(0, 10);
+    const d = String(row.date).trim().slice(0, 10);
     setDate(d);
     setPrefillIn(toHHMM(row.in_time));
     setPrefillOut(toHHMM(row.out_time));
