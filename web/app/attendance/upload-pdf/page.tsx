@@ -142,7 +142,8 @@ export default function AttendancePdfUploadPage() {
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Matching uses{" "}
         <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-900">employees.at_div_code</code> then{" "}
-        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-900">employee_code</code>.
+        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-900">employee_code</code>. Daily PDFs often leave{" "}
+        <strong>OUT</strong> blank—those rows import with <strong>IN only</strong> (same rules as manual entry).
       </p>
 
       <div className="mt-6 flex flex-wrap gap-4 text-sm">

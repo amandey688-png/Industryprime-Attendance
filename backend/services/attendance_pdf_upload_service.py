@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -69,18 +69,43 @@ def _match_employee(
     return None, "unmapped"
 
 
-def _validate_in_out(day: date, in_time: Optional[str], out_time: Optional[str]) -> Tuple[bool, str]:
-    del day  # reserved for future same-day rules
-    if not in_time or not out_time:
-        return False, "Missing in_time or out_time"
-    tin = _parse_time(in_time)
-    tout = _parse_time(out_time)
-    if not tin or not tout:
-        return False, "Invalid time format"
+def _safe_parse_time(raw: Optional[str]) -> Optional[time]:
+    if not raw or not str(raw).strip():
+        return None
     try:
-        _hours_between(tin, tout)
-    except HTTPException:
-        return False, "in_time must be before out_time"
+        return _parse_time(raw)
+    except (ValueError, TypeError, IndexError):
+        return None
+
+
+def _validate_pdf_times(_day: date, in_time: Optional[str], out_time: Optional[str]) -> Tuple[bool, str]:
+    """
+    Daily attendance PDFs often list IN without OUT (not clocked yet / MIS in vendor reports).
+    Match `calculate_attendance_row`: valid IN-only rows are imported as Present with optional Late.
+    When both times exist, enforce IN < OUT.
+    """
+    in_s = (in_time or "").strip()
+    out_s = (out_time or "").strip()
+    tin = _safe_parse_time(in_s) if in_s else None
+    tout = _safe_parse_time(out_s) if out_s else None
+
+    if in_s and tin is None:
+        return False, "Invalid in time format"
+    if out_s and tout is None:
+        return False, "Invalid out time format"
+
+    if not tin and not tout:
+        return False, "Missing in time (no punch on this row)"
+
+    if not tin and tout:
+        return False, "Out time without in time"
+
+    if tout is not None:
+        try:
+            _hours_between(tin, tout)
+        except HTTPException:
+            return False, "in_time must be before out_time"
+
     return True, ""
 
 
@@ -214,7 +239,7 @@ def process_pdf_upload_job(
                 )
                 continue
 
-            ok, reason = _validate_in_out(day, pr.in_time, pr.out_time)
+            ok, reason = _validate_pdf_times(day, pr.in_time, pr.out_time)
             if not ok:
                 failed_count += 1
                 errors.append({"row": pr.pdf_row_index, "reason": reason})
