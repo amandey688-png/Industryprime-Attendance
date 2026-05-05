@@ -99,8 +99,9 @@ export default function DashboardPage() {
             <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
               Welcome {user?.name || "team member"}. Your role controls which modules and actions are available.
               Use <span className="font-semibold text-emerald-800 dark:text-emerald-200">Add Attendance</span> in the
-              top bar to open the entry page; numbers below refresh from the database every few seconds while you stay
-              on this page.
+              top bar for <span className="font-medium">Enter Atten.</span> (manual) or{" "}
+              <span className="font-medium">Upload → PDF (daily report)</span>; numbers below refresh from the database
+              every few seconds while you stay on this page.
             </p>
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">

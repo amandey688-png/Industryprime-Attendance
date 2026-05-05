@@ -125,11 +125,15 @@ export default function Sidebar({
 
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
         {visibleItems.map((item) => {
+          /* Keep "Attendance" like before: only the employee list + /attendance/:id sheets—not PDF/upload tools under the same prefix. */
+          const isAttendanceSheet =
+            pathname === "/attendance" ||
+            (pathname.startsWith("/attendance/") && !pathname.startsWith("/attendance/upload"));
           const active =
             item.href === "/dashboard"
               ? pathname === "/dashboard"
               : item.href === "/attendance"
-                ? pathname === "/attendance" || pathname.startsWith("/attendance/")
+                ? isAttendanceSheet
                 : pathname.startsWith(item.href);
           const Icon = item.icon;
 
