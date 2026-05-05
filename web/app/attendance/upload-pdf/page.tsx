@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getCurrentUser, type AuthUser } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -129,10 +130,17 @@ export default function AttendancePdfUploadPage() {
   return (
     <div className="mx-auto max-w-4xl pb-24">
       <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-        Upload attendance (PDF)
+        PDF attendance import
       </h1>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-        Imports daily reports (EMP code, IN/OUT times, header date). Matching uses{" "}
+        This tool is separate from the sidebar{" "}
+        <Link href="/attendance" className="font-semibold text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-300">
+          Attendance
+        </Link>{" "}
+        list (employee month sheets). After a successful import, open an employee there to see updated IN/OUT for the report date.
+      </p>
+      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        Matching uses{" "}
         <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-900">employees.at_div_code</code> then{" "}
         <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-900">employee_code</code>.
       </p>
@@ -265,6 +273,22 @@ export default function AttendancePdfUploadPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-3xl border border-emerald-200/80 bg-emerald-50/40 p-5 dark:border-emerald-900/60 dark:bg-emerald-950/25 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">
+              {result.dry_run
+                ? "Dry run: nothing was saved. Turn off “Dry run” to write attendance, then review it under Attendance."
+                : result.success > 0
+                  ? "Imported times are stored for the report date. Use Attendance → pick an employee → open that month to review the grid."
+                  : "Fix errors or try another PDF, then import again."}
+            </p>
+            <Link
+              href="/attendance"
+              className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              Open Attendance
+            </Link>
           </div>
         </div>
       ) : null}

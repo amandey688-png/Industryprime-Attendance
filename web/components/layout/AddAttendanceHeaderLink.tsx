@@ -26,6 +26,7 @@ function sameOriginAttendanceEntryUrl(apiUrl: string): string {
 export default function AddAttendanceHeaderLink() {
   const [manualHref, setManualHref] = useState("/attendance-entry?from=app");
   const [open, setOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,7 +50,10 @@ export default function AddAttendanceHeaderLink() {
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!wrapRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setUploadOpen(false);
+      }
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -70,7 +74,7 @@ export default function AddAttendanceHeaderLink() {
 
       {open ? (
         <div
-          className="absolute right-0 top-full z-50 mt-1 min-w-[11rem] overflow-hidden rounded-2xl border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-950"
+          className="absolute right-0 top-full z-50 mt-1 min-w-[13rem] overflow-visible rounded-2xl border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-950"
           role="menu"
         >
           <a
@@ -79,18 +83,44 @@ export default function AddAttendanceHeaderLink() {
             rel="noopener noreferrer"
             className="block px-3 py-2 font-medium text-zinc-900 hover:bg-emerald-50 dark:text-zinc-100 dark:hover:bg-emerald-950/60"
             role="menuitem"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+              setUploadOpen(false);
+            }}
           >
             Enter Atten.
           </a>
-          <Link
-            href="/attendance/upload-pdf"
-            className="block px-3 py-2 font-medium text-zinc-900 hover:bg-emerald-50 dark:text-zinc-100 dark:hover:bg-emerald-950/60"
-            role="menuitem"
-            onClick={() => setOpen(false)}
+          <div className="border-t border-zinc-100 dark:border-zinc-800" />
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-3 py-2 text-left font-medium text-zinc-900 hover:bg-emerald-50 dark:text-zinc-100 dark:hover:bg-emerald-950/60"
+            aria-expanded={uploadOpen}
+            onClick={(e) => {
+              e.stopPropagation();
+              setUploadOpen((u) => !u);
+            }}
           >
             Upload
-          </Link>
+            <span className="text-zinc-400">{uploadOpen ? "▾" : "▸"}</span>
+          </button>
+          {uploadOpen ? (
+            <div className="border-t border-zinc-100 bg-zinc-50/90 py-1 dark:border-zinc-800 dark:bg-zinc-900/50">
+              <Link
+                href="/attendance/upload-pdf"
+                className="block px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100/80 dark:text-emerald-200 dark:hover:bg-emerald-950/80"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  setUploadOpen(false);
+                }}
+              >
+                PDF (daily report)
+              </Link>
+              <p className="px-4 pb-2 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                Upload a daily attendance PDF; results show on this page, then on each employee&apos;s sheet.
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
