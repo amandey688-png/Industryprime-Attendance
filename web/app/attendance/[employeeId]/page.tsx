@@ -18,9 +18,11 @@ type AttendanceRow = {
   working_hours_display?: string;
   actual_hours: number;
   shortfall: number;
+  shortfall_display?: string;
   present: string;
   absent: string;
   late_time: number;
+  late_time_display?: string;
   time_value: number;
   status: "P" | "A";
   status_ot_sf: string;
@@ -92,9 +94,11 @@ function calculateLocal(
       working_hours_display: "0.00",
       actual_hours: 0,
       shortfall: 0,
+      shortfall_display: "0.00",
       present: "P",
       absent: "",
       late_time: 0,
+      late_time_display: "0.00",
       time_value: 0,
       status: "P",
       status_ot_sf: holidayLabel,
@@ -116,9 +120,11 @@ function calculateLocal(
       working_hours_display: "0.00",
       actual_hours: 0,
       shortfall: 0,
+      shortfall_display: "0.00",
       present: "P",
       absent: "",
       late_time: 0,
+      late_time_display: "0.00",
       time_value: 0,
       status: "P",
       status_ot_sf: isSaturday ? "Saturday" : "Sunday",
@@ -133,9 +139,11 @@ function calculateLocal(
       working_hours_display: "0.00",
       actual_hours: 0,
       shortfall: 0,
+      shortfall_display: "0.00",
       present: "P",
       absent: "",
       late_time: 0,
+      late_time_display: "0.00",
       time_value: 0,
       status: "P",
       status_ot_sf: "Sunday",
@@ -145,8 +153,9 @@ function calculateLocal(
   if (inTime && !outTime) {
     const [inH, inM] = inTime.split(":").map(Number);
     const inMinutes = inH * 60 + inM;
-    const lateCutoff = 9 * 60 + 30;
-    const late = Number(Math.max(0, (inMinutes - lateCutoff) / 60).toFixed(2));
+    const lateCutoff = 9 * 60;
+    const lateMinutes = Math.max(0, inMinutes - lateCutoff);
+    const late = Number(minutesToHHMM(lateMinutes));
     return {
       ...row,
       total_hours: 0,
@@ -154,9 +163,11 @@ function calculateLocal(
       working_hours_display: "0.00",
       actual_hours: 0,
       shortfall: 0,
+      shortfall_display: "0.00",
       present: "P",
       absent: "",
       late_time: late,
+      late_time_display: minutesToHHMM(lateMinutes),
       time_value: 0,
       status: "P",
       status_ot_sf: late > 0 ? "Late" : "OK",
@@ -170,9 +181,11 @@ function calculateLocal(
       working_hours_display: "0.00",
       actual_hours: 0,
       shortfall: row.total_hours,
+      shortfall_display: minutesToHHMM(hhmmToMinutes(row.total_hours)),
       present: "",
       absent: "A",
       late_time: 0,
+      late_time_display: "0.00",
       time_value: 0,
       status: "A",
       status_ot_sf: "Absent",
@@ -191,9 +204,13 @@ function calculateLocal(
   const actual = working;
   const scheduledHours =
     isSaturday && !(email && WEEKEND_AUTO_PRESENT_EMAILS.has(email)) ? 5 : 9;
-  const shortfall = Number(minutesToHHMM(Math.max(0, scheduledHours * 60 - workingMinutes)));
-  const lateCutoff = 9 * 60 + 30;
-  const late = Number(Math.max(0, (inMinutes - lateCutoff) / 60).toFixed(2));
+  const shortfallMinutes = Math.max(0, scheduledHours * 60 - workingMinutes);
+  const shortfallDisplay = minutesToHHMM(shortfallMinutes);
+  const shortfall = Number(shortfallDisplay);
+  const lateCutoff = 9 * 60;
+  const lateMinutes = Math.max(0, inMinutes - lateCutoff);
+  const lateDisplay = minutesToHHMM(lateMinutes);
+  const late = Number(lateDisplay);
   const baseStatus = actual > scheduledHours ? "OT" : shortfall > 0 ? "SF" : "OK";
   return {
     ...row,
@@ -201,9 +218,11 @@ function calculateLocal(
     working_hours_display: workingDisplay,
     actual_hours: actual,
     shortfall,
+    shortfall_display: shortfallDisplay,
     present: "P",
     absent: "",
     late_time: late,
+    late_time_display: lateDisplay,
     time_value: actual,
     status: "P",
     status_ot_sf: late > 0 ? "Late" : baseStatus,
@@ -465,7 +484,7 @@ export default function AttendanceDetailPage() {
                     />
                     <EditableNumber value={row.total_hours} disabled={!canEditAttendance} onChange={(value) => patchLocalRow(row.date, { total_hours: value })} onBlur={(value) => void saveRow({ ...row, total_hours: value })} />
                     <Cell>{row.working_hours_display ?? minutesToHHMM(hhmmToMinutes(row.working_hours ?? 0))}</Cell>
-                    <EditableNumber value={row.shortfall} disabled={!canEditAttendance} onChange={(value) => patchLocalRow(row.date, { shortfall: value })} onBlur={(value) => void saveRow({ ...row, shortfall: value })} />
+                    <Cell>{row.shortfall_display ?? minutesToHHMM(hhmmToMinutes(row.shortfall ?? 0))}</Cell>
                     <EditableSelect
                       value={row.status}
                       disabled={!canEditAttendance}
@@ -486,7 +505,7 @@ export default function AttendanceDetailPage() {
                         })
                       }
                     />
-                    <EditableNumber value={row.late_time} disabled={!canEditAttendance} decimals={2} onChange={(value) => patchLocalRow(row.date, { late_time: value })} onBlur={(value) => void saveRow({ ...row, late_time: value })} />
+                    <Cell>{row.late_time_display ?? minutesToHHMM(hhmmToMinutes(row.late_time ?? 0))}</Cell>
                     <EditableNumber value={row.time_value} disabled={!canEditAttendance} onChange={(value) => patchLocalRow(row.date, { time_value: value })} onBlur={(value) => void saveRow({ ...row, time_value: value })} />
                     <EditableText value={savingDate === row.date ? "Saving..." : row.status_ot_sf} disabled={!canEditAttendance} onChange={(value) => patchLocalRow(row.date, { status_ot_sf: value })} onBlur={(value) => void saveRow({ ...row, status_ot_sf: value })} />
                   </tr>

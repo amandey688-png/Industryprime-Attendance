@@ -84,9 +84,11 @@ class EmployeeAttendanceRowOut(BaseModel):
     working_hours_display: str = "0.00"
     actual_hours: float
     shortfall: float
+    shortfall_display: str = "0.00"
     present: str
     absent: str
     late_time: float
+    late_time_display: str = "0.00"
     time_value: float
     status: str
     status_ot_sf: str
