@@ -8,13 +8,7 @@ from fastapi import HTTPException
 
 from database.supabase_client import SupabaseRest
 from services.attendance_link_entry_service import link_entries_by_date_for_month
-from services.working_hours import (
-    calculate_working_minutes,
-    hhmm_value_to_minutes,
-    minutes_to_hhmm_display,
-    minutes_to_hhmm_float,
-    parse_time_like,
-)
+from services.working_hours import calculate_working_minutes, hhmm_value_to_minutes, minutes_to_hhmm_display, minutes_to_hhmm_float, parse_time_like
 
 # Employees in this set get empty Saturday + Sunday treated as Present (no punches).
 _WEEKEND_AUTO_PRESENT_EMAILS = frozenset({"adrija@industryprime.com"})
@@ -100,18 +94,18 @@ def _scheduled_hours_full_day(day: date, weekend_auto_present: bool) -> float:
 
 
 # Clock-in strictly after this (local time) counts as late for all employees.
-_LATE_CUTOFF_MINUTES = 9 * 60 + 30  # 9:30 AM
+_LATE_CUTOFF_MINUTES = 9 * 60  # 9:00 AM
 
 
 def _time_to_minutes(t: time) -> int:
     return t.hour * 60 + t.minute
 
 
-def _late_hours_after_cutoff(in_time: time) -> float:
+def _late_minutes_after_cutoff(in_time: time) -> int:
     delta = _time_to_minutes(in_time) - _LATE_CUTOFF_MINUTES
     if delta <= 0:
-        return 0.0
-    return round(delta / 60, 2)
+        return 0
+    return int(delta)
 
 
 def calculate_attendance_row(
@@ -137,10 +131,12 @@ def calculate_attendance_row(
             "working_hours_display": "0.00",
             "actual_hours": 0,
             "shortfall": 0,
+            "shortfall_display": "0.00",
             "status": "P",
             "present": "P",
             "absent": "",
             "late_time": 0,
+            "late_time_display": "0.00",
             "time_value": 0,
             "status_ot_sf": holiday_name,
             "use_calculated_calendar": True,
@@ -158,10 +154,12 @@ def calculate_attendance_row(
             "working_hours_display": "0.00",
             "actual_hours": 0,
             "shortfall": 0,
+            "shortfall_display": "0.00",
             "status": "P",
             "present": "P",
             "absent": "",
             "late_time": 0,
+            "late_time_display": "0.00",
             "time_value": 0,
             "status_ot_sf": label,
             "use_calculated_calendar": True,
@@ -178,10 +176,12 @@ def calculate_attendance_row(
             "working_hours_display": "0.00",
             "actual_hours": 0,
             "shortfall": 0,
+            "shortfall_display": "0.00",
             "status": "P",
             "present": "P",
             "absent": "",
             "late_time": 0,
+            "late_time_display": "0.00",
             "time_value": 0,
             "status_ot_sf": "Sunday",
             "use_calculated_calendar": True,
@@ -189,8 +189,9 @@ def calculate_attendance_row(
 
     # Any date: IN without OUT counts as Present (P); clock-in after 9:30 → Late.
     if in_time and not out_time:
-        late_time = _late_hours_after_cutoff(in_time)
-        status_ot_sf = "Late" if late_time > 0 else "OK"
+        late_minutes = _late_minutes_after_cutoff(in_time)
+        late_time = minutes_to_hhmm_float(late_minutes)
+        status_ot_sf = "Late" if late_minutes > 0 else "OK"
         return {
             **row,
             "date": day.isoformat(),
@@ -201,10 +202,12 @@ def calculate_attendance_row(
             "working_hours_display": "0.00",
             "actual_hours": 0,
             "shortfall": 0,
+            "shortfall_display": "0.00",
             "status": "P",
             "present": "P",
             "absent": "",
             "late_time": late_time,
+            "late_time_display": minutes_to_hhmm_display(late_minutes),
             "time_value": 0,
             "status_ot_sf": status_ot_sf,
             "use_calculated_calendar": True,
@@ -219,11 +222,13 @@ def calculate_attendance_row(
             "working_hours": 0,
             "working_hours_display": "0.00",
             "actual_hours": 0,
-            "shortfall": _required_hours(day),
+            "shortfall": minutes_to_hhmm_float(int(round(_required_hours(day) * 60))),
+            "shortfall_display": minutes_to_hhmm_display(int(round(_required_hours(day) * 60))),
             "status": "A",
             "present": "",
             "absent": "A",
             "late_time": 0,
+            "late_time_display": "0.00",
             "time_value": 0,
             "status_ot_sf": "Absent",
         }
@@ -235,9 +240,10 @@ def calculate_attendance_row(
     actual = working
     shortfall_minutes = max(0, scheduled_minutes - working_minutes)
     shortfall = minutes_to_hhmm_float(shortfall_minutes)
-    late_time = _late_hours_after_cutoff(in_time)
+    late_minutes = _late_minutes_after_cutoff(in_time)
+    late_time = minutes_to_hhmm_float(late_minutes)
     base_status = "OT" if working_minutes > scheduled_minutes else ("SF" if shortfall_minutes > 0 else "OK")
-    status_ot_sf = "Late" if late_time > 0 else base_status
+    status_ot_sf = "Late" if late_minutes > 0 else base_status
 
     return {
         **row,
@@ -248,10 +254,12 @@ def calculate_attendance_row(
         "working_hours_display": minutes_to_hhmm_display(working_minutes),
         "actual_hours": actual,
         "shortfall": shortfall,
+        "shortfall_display": minutes_to_hhmm_display(shortfall_minutes),
         "status": "P",
         "present": "P",
         "absent": "",
         "late_time": late_time,
+        "late_time_display": minutes_to_hhmm_display(late_minutes),
         "time_value": actual,
         "status_ot_sf": status_ot_sf,
         "scheduled_hours": scheduled,
@@ -279,7 +287,7 @@ def _stored_attendance_row(
     # Production rule: derived hours always come from IN/OUT calculation logic.
     working_hours = float(calculated["working_hours"])
     actual_hours = float(calculated["actual_hours"])
-    late_time = float(row.get("late_time") if row.get("late_time") is not None else calculated["late_time"])
+    late_time = float(calculated["late_time"])
     status = str(row.get("status") or calculated["status"])
     status_ot_sf = str(row.get("status_ot_sf") or calculated["status_ot_sf"])
     sched = float(calculated.get("scheduled_hours") or 9)
@@ -292,7 +300,7 @@ def _stored_attendance_row(
         "check_out": calculated.get("out_time"),
         "working_hours": working_hours,
         "status": status,
-        "late_minutes": int(late_time * 60),
+        "late_minutes": hhmm_value_to_minutes(late_time),
         "overtime_hours": round(overtime_hours, 2),
         "final_status": status_ot_sf,
         "source": source,
@@ -373,6 +381,8 @@ def serialize_attendance_row(
         working_hours = calculated["working_hours"]
         actual_hours = calculated["actual_hours"]
         late_time = calculated["late_time"]
+        late_time_display = calculated.get("late_time_display", "0.00")
+        shortfall_display = calculated.get("shortfall_display", "0.00")
         status = calculated["status"]
         status_ot_sf = calculated["status_ot_sf"]
     else:
@@ -387,9 +397,11 @@ def serialize_attendance_row(
         actual_hours = calculated["actual_hours"]
         late_time = row.get("late_time")
         if late_time is None and row.get("late_minutes") is not None:
-            late_time = float(row.get("late_minutes") or 0) / 60
+            late_time = minutes_to_hhmm_float(int(row.get("late_minutes") or 0))
         if late_time is None:
             late_time = calculated["late_time"]
+        late_time_display = minutes_to_hhmm_display(hhmm_value_to_minutes(late_time))
+        shortfall_display = minutes_to_hhmm_display(hhmm_value_to_minutes(calculated["shortfall"]))
         status = row.get("status") or calculated["status"]
         status_ot_sf = row.get("status_ot_sf") or row.get("final_status") or calculated["status_ot_sf"]
     # Guard against old/manual bad data: if attendance is Present, OT/SF must never display "Absent".
@@ -410,9 +422,11 @@ def serialize_attendance_row(
         "working_hours_display": minutes_to_hhmm_display(hhmm_value_to_minutes(working_hours)),
         "actual_hours": float(actual_hours),
         "shortfall": calculated["shortfall"],
+        "shortfall_display": shortfall_display,
         "present": "P" if status == "P" else "",
         "absent": "A" if status == "A" else "",
         "late_time": float(late_time),
+        "late_time_display": late_time_display,
         "time_value": float(row.get("time_value") or calculated["time_value"]),
         "status": status,
         "status_ot_sf": status_ot_sf,
