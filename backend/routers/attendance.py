@@ -18,7 +18,13 @@ from fastapi import (
 
 from database.supabase_client import get_supabase, get_supabase_user
 from dependencies.auth_dependency import AuthContext, get_auth_context
-from schemas.attendance import AttendanceMonthOut, AttendanceUpdateIn, EmployeeAttendanceRowOut
+from schemas.attendance import (
+    AttendanceMonthOut,
+    AttendanceUpdateIn,
+    EmployeeAttendanceRowOut,
+    RecalculateLateCutoffIn,
+    RecalculateLateCutoffOut,
+)
 from schemas.attendance_link import (
     AttendanceAddIn,
     AttendanceAddOut,
@@ -32,6 +38,7 @@ from services.attendance_pdf_upload_service import (
     insert_upload_placeholder,
     process_pdf_upload_job,
 )
+from services.attendance_late_cutoff_migration import run_attendance_late_cutoff_recalculation
 
 router = APIRouter()
 
@@ -118,6 +125,37 @@ def _assert_can_update_attendance(employee_id: str, auth: AuthContext) -> None:
             status_code=403,
             detail="Read-only access: only Admin or Master Admin can edit attendance.",
         )
+
+
+@router.post(
+    "/admin/recalculate-late-cutoff",
+    response_model=RecalculateLateCutoffOut,
+    summary="Recompute late minutes / final_status for all attendance rows (9:31 cutoff)",
+)
+def post_recalculate_late_cutoff(
+    body: RecalculateLateCutoffIn,
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Applies the same logic as saving a row via the UI (`calculate_attendance_row` + persisted snapshot).
+
+    Restricted to `master_admin`; uses service-role DB access. For large datasets, prefer running
+    `python scripts/recalculate_attendance_late_cutoff.py` on the backend host instead.
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization bearer token")
+    auth = get_auth_context(authorization=authorization)
+    if auth.role != "master_admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Only master_admin may run attendance late-cutoff recalculation.",
+        )
+    stats = run_attendance_late_cutoff_recalculation(
+        get_supabase(),
+        dry_run=body.dry_run,
+        employee_id_filter=body.employee_id,
+    )
+    return RecalculateLateCutoffOut(**stats)
 
 
 def _auth_employee_access(employee_id: str, authorization: Optional[str]):

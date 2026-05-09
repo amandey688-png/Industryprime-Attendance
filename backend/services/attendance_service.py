@@ -18,8 +18,8 @@ REQUIRED_COLUMNS = [
     "status",
 ]
 
-# Business rule: late if check-in after this local time
-LATE_THRESHOLD = time(9, 30)
+# Business rule: late if check-in strictly after this local time (9:31:00 is on time)
+LATE_THRESHOLD = time(9, 31)
 REGULAR_DAY_HOURS = 9.0
 HALF_DAY_MAX_HOURS = 4.0
 
@@ -96,7 +96,7 @@ def apply_attendance_rules(
 ) -> Tuple[int, float, str]:
     """
     Rules:
-    - Late if check_in > 9:30 AM → late_minutes
+    - Late if check_in > 9:31 AM → late_minutes
     - Half day if working_hours < 4 → final_status half_day
     - Overtime if working_hours > 9 → overtime_hours
     Returns: (late_minutes, overtime_hours, final_status)

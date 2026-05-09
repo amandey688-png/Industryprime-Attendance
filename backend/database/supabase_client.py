@@ -109,8 +109,16 @@ class SupabaseRest:
         where_lte: Optional[Dict[str, Any]] = None,
         order: Optional[str] = None,
         limit: Optional[int] = None,
+        *,
+        items_range: Optional[Tuple[int, int]] = None,
     ) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {"select": select}
+        headers: Dict[str, str] = {**self.headers}
+        # PostgREST: Range over item indices [lo..hi], inclusive — use instead of LIMIT for paging.
+        if items_range is not None:
+            lo, hi = items_range
+            headers["Range-Unit"] = "items"
+            headers["Range"] = f"{lo}-{hi}"
         if where_eq:
             for k, v in where_eq.items():
                 params[k] = f"eq.{v}"
@@ -133,12 +141,12 @@ class SupabaseRest:
                     params[k] = f"lte.{v}"
         if order:
             params["order"] = order
-        if limit is not None:
+        if limit is not None and items_range is None:
             params["limit"] = limit
 
         resp = requests.get(
             f"{self.rest_base}/{table}",
-            headers=self.headers,
+            headers=headers,
             params=params,
             timeout=30,
         )

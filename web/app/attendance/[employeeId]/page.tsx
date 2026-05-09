@@ -53,6 +53,9 @@ function monthLabel(month: number, year: number) {
 
 const WEEKEND_AUTO_PRESENT_EMAILS = new Set(["adrija@industryprime.com"]);
 
+/** Minutes from midnight; IN at or before this time is not late (same as backend). */
+const LATE_CUTOFF_MINUTES = 9 * 60 + 31;
+
 function hhmmToMinutes(value: unknown): number {
   if (value == null) return 0;
   const text = String(value).trim();
@@ -153,8 +156,7 @@ function calculateLocal(
   if (inTime && !outTime) {
     const [inH, inM] = inTime.split(":").map(Number);
     const inMinutes = inH * 60 + inM;
-    const lateCutoff = 9 * 60;
-    const lateMinutes = Math.max(0, inMinutes - lateCutoff);
+    const lateMinutes = Math.max(0, inMinutes - LATE_CUTOFF_MINUTES);
     const late = Number(minutesToHHMM(lateMinutes));
     return {
       ...row,
@@ -207,8 +209,7 @@ function calculateLocal(
   const shortfallMinutes = Math.max(0, scheduledHours * 60 - workingMinutes);
   const shortfallDisplay = minutesToHHMM(shortfallMinutes);
   const shortfall = Number(shortfallDisplay);
-  const lateCutoff = 9 * 60;
-  const lateMinutes = Math.max(0, inMinutes - lateCutoff);
+  const lateMinutes = Math.max(0, inMinutes - LATE_CUTOFF_MINUTES);
   const lateDisplay = minutesToHHMM(lateMinutes);
   const late = Number(lateDisplay);
   const baseStatus = actual > scheduledHours ? "OT" : shortfall > 0 ? "SF" : "OK";
