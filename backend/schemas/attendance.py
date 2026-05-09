@@ -17,7 +17,7 @@ class AttendanceRowOut(BaseModel):
     check_out: datetime
     status: str
     working_hours: float = Field(..., description="Hours between check-in and check-out")
-    late_minutes: int = Field(..., description="Minutes after 9:30 AM check-in threshold")
+    late_minutes: int = Field(..., description="Minutes after 9:31 AM check-in threshold")
     overtime_hours: float = Field(..., description="Hours beyond 9h regular day")
     final_status: str = Field(
         ...,
@@ -92,6 +92,22 @@ class EmployeeAttendanceRowOut(BaseModel):
     time_value: float
     status: str
     status_ot_sf: str
+
+
+class RecalculateLateCutoffIn(BaseModel):
+    dry_run: bool = False
+    employee_id: Optional[str] = Field(
+        default=None,
+        description="Optional employees.id UUID; omit to migrate all persisted attendance rows",
+    )
+
+
+class RecalculateLateCutoffOut(BaseModel):
+    rows_scanned: int
+    rows_ready_to_upsert: int
+    rows_changed_by_rules: int
+    rows_upserted: int
+    monthly_snapshots_refreshed: int
 
 
 class AttendanceMonthOut(BaseModel):

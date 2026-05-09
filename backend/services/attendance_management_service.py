@@ -93,8 +93,8 @@ def _scheduled_hours_full_day(day: date, weekend_auto_present: bool) -> float:
     return 9.0
 
 
-# Clock-in strictly after this (local time) counts as late for all employees.
-_LATE_CUTOFF_MINUTES = 9 * 60  # 9:00 AM
+# IN at 9:31 or earlier (same clock minute) is not late; from 9:32 onward counts as late (all employees).
+_LATE_CUTOFF_MINUTES = 9 * 60 + 31  # 9:31 AM
 
 
 def _time_to_minutes(t: time) -> int:
@@ -187,7 +187,7 @@ def calculate_attendance_row(
             "use_calculated_calendar": True,
         }
 
-    # Any date: IN without OUT counts as Present (P); clock-in after 9:30 → Late.
+    # Any date: IN without OUT counts as Present (P); clock-in after 9:31 → Late.
     if in_time and not out_time:
         late_minutes = _late_minutes_after_cutoff(in_time)
         late_time = minutes_to_hhmm_float(late_minutes)
