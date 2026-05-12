@@ -9,7 +9,11 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException, status
 
 from database.supabase_client import SupabaseRest
-from services.email_service import render_email_template, send_email
+from services.email_service import (
+    MISSING_POSTMARK_ON_API_HOST_MESSAGE,
+    render_email_template,
+    send_email,
+)
 from services.auth_service import _jwt_secret
 
 try:
@@ -109,7 +113,8 @@ def issue_otp(
         {"email": clean_email, "code": code, "purpose": purpose, "minutes": OTP_TTL_MINUTES},
     )
     text = f"Your IndustryPrime {purpose} code is {code}. It expires in {OTP_TTL_MINUTES} minutes."
-    send_email(clean_email, subject=subject, html=html, text=text)
+    if not send_email(clean_email, subject=subject, html=html, text=text):
+        raise RuntimeError(MISSING_POSTMARK_ON_API_HOST_MESSAGE)
 
 
 def verify_latest_otp(supabase: SupabaseRest, *, email: str, purpose: str, code: str) -> Dict[str, Any]:

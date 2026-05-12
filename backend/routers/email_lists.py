@@ -8,7 +8,10 @@ from pydantic import BaseModel, Field
 from database.supabase_client import get_supabase_service
 from dependencies.auth_dependency import get_auth_context
 from services.auth_service import require_role
-from services.email_service import email_delivery_mode, send_email
+from services.email_service import (
+    MISSING_POSTMARK_ON_API_HOST_MESSAGE,
+    send_email,
+)
 
 router = APIRouter()
 
@@ -175,7 +178,7 @@ def send_test_email(
         "<p>Sent by IndustryPrime · aman@industryprime.com</p></body></html>"
     )
     try:
-        send_email(
+        ok = send_email(
             to=to_email,
             subject="IndustryPrime email delivery test",
             html=html,
@@ -183,4 +186,9 @@ def send_test_email(
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Email test failed: {exc}") from exc
+    if not ok:
+        raise HTTPException(
+            status_code=400,
+            detail=MISSING_POSTMARK_ON_API_HOST_MESSAGE,
+        )
     return {"ok": True, "to_email": to_email, "delivery_mode": email_delivery_mode()}

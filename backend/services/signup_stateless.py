@@ -24,7 +24,11 @@ from services.auth_service import (
     hash_password,
     normalize_email,
 )
-from services.email_service import render_email_template, send_email
+from services.email_service import (
+    MISSING_POSTMARK_ON_API_HOST_MESSAGE,
+    render_email_template,
+    send_email,
+)
 from services.otp_service import OTP_TTL_MINUTES, _bcrypt_hash, _bcrypt_verify
 
 
@@ -118,7 +122,8 @@ def start_stateless_signup(
         {"email": clean, "code": code, "purpose": "signup", "minutes": OTP_TTL_MINUTES},
     )
     text = f"Your IndustryPrime signup code is {code}. It expires in {OTP_TTL_MINUTES} minutes."
-    send_email(clean, subject=subject, html=html, text=text)
+    if not send_email(clean, subject=subject, html=html, text=text):
+        raise RuntimeError(MISSING_POSTMARK_ON_API_HOST_MESSAGE)
     return ticket
 
 
@@ -158,7 +163,8 @@ def resend_stateless_signup(
         {"email": email, "code": code, "purpose": "signup", "minutes": OTP_TTL_MINUTES},
     )
     text = f"Your IndustryPrime signup code is {code}. It expires in {OTP_TTL_MINUTES} minutes."
-    send_email(email, subject=subject, html=html, text=text)
+    if not send_email(email, subject=subject, html=html, text=text):
+        raise RuntimeError(MISSING_POSTMARK_ON_API_HOST_MESSAGE)
     return ticket
 
 

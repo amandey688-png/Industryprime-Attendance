@@ -21,13 +21,16 @@ from database.supabase_client import _bootstrap_backend_env
 logger = logging.getLogger(__name__)
 
 # Shown when POSTMARK_* are unset on the Python process (Supabase Dashboard SMTP is unrelated).
-_MISSING_POSTMARK_ON_API_HOST = (
+# Exported for signup/OTP paths that must fail closed if mail cannot be sent.
+MISSING_POSTMARK_ON_API_HOST_MESSAGE = (
     "Postmark is not configured on the FastAPI server (this is separate from Supabase). "
     "Supabase Dashboard → Authentication → Email/SMTP only affects Supabase Auth emails (e.g. magic links), "
     "not leave or OTP mail from this app. Set POSTMARK_SERVER_TOKEN or POSTMARK_SMTP_TOKEN plus "
     "POSTMARK_FROM_EMAIL on the host that runs the API (Render/Railway/backend/.env), then redeploy. "
     "Or set EMAIL_MODE=log to skip delivery and only log intended recipients (no Postmark required)."
 )
+
+_MISSING_POSTMARK_ON_API_HOST = MISSING_POSTMARK_ON_API_HOST_MESSAGE
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "emails"
 _jinja = (
@@ -43,6 +46,11 @@ _jinja = (
 def _env(name: str, default: str = "") -> str:
     _bootstrap_backend_env()
     return os.getenv(name, default).strip()
+
+
+def postmark_token_configured() -> bool:
+    """True if a Postmark server/SMTP token is present (required for real delivery when EMAIL_MODE=postmark)."""
+    return bool(_postmark_server_token())
 
 
 def email_delivery_mode() -> str:
@@ -161,7 +169,14 @@ def _test_redirect_address() -> str:
     return raw.strip().lower()
 
 
-def send_email(to: str | list[str], subject: str, html: str, text: Optional[str] = None) -> None:
+def send_email(to: str | list[str], subject: str, html: str, text: Optional[str] = None) -> bool:
+    """
+    Send one message. Returns True if the message was accepted for delivery (Postmark API/SMTP success)
+    or EMAIL_MODE=log (logged only, treated as success for workflows that allow dry-run).
+
+    Returns False when EMAIL_MODE=postmark but no Postmark token is configured: logs intended recipients
+    and does not raise (use for leave notifications). Signup/OTP should check the return value and raise.
+    """
     recipients: list[str]
     if isinstance(to, str):
         recipients = [to.strip()]
@@ -178,7 +193,18 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
             recipients,
             preview,
         )
-        return
+        return True
+
+    if not postmark_token_configured():
+        preview = (html or "")[:800].replace("\n", " ")
+        logger.warning(
+            "Postmark token not set on API host; skipping outbound email (Supabase Auth SMTP does not apply). "
+            "subject=%r to=%s",
+            subject,
+            recipients,
+        )
+        logger.info("Intended email (not sent) html_preview=%s", preview)
+        return False
 
     redirect = _test_redirect_address()
     if redirect:
@@ -211,7 +237,7 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
             stream=stream,
         )
         logger.info("Postmark REST email sent subject=%s to=%s stream=%s", subject, recipients, stream)
-        return
+        return True
 
     if mode not in ("smtp", "legacy") and _postmark_server_token():
         try:
@@ -224,7 +250,7 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
                 stream=stream,
             )
             logger.info("Postmark REST email sent subject=%s to=%s stream=%s", subject, recipients, stream)
-            return
+            return True
         except Exception as exc:
             logger.warning("Postmark REST send failed, falling back to SMTP: %s", exc)
 
@@ -248,7 +274,7 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
                 smtp.login(conf["username"], conf["password"])
                 smtp.send_message(msg)
             logger.info("Postmark SMTP email sent subject=%s to=%s stream=%s", subject, recipients, stream)
-            return
+            return True
         except Exception as exc:
             last_exc = exc
             exc_text = str(exc).lower()
@@ -260,3 +286,4 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
 
     if last_exc:
         raise last_exc
+    raise RuntimeError("Postmark SMTP send did not complete")  # pragma: no cover
