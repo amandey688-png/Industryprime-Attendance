@@ -10,6 +10,7 @@ from dependencies.auth_dependency import get_auth_context
 from services.auth_service import require_role
 from services.email_service import (
     MISSING_POSTMARK_ON_API_HOST_MESSAGE,
+    email_delivery_mode,
     send_email,
 )
 
@@ -185,7 +186,14 @@ def send_test_email(
             text="IndustryPrime email test: delivery successful (or EMAIL_MODE=log — see API logs).",
         )
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Email test failed: {exc}") from exc
+        detail = str(exc)
+        low = detail.lower()
+        if "timed out" in low or "timeout" in low:
+            detail += (
+                " — On Render, outbound SMTP (port 587) is often blocked; use POSTMARK_DELIVERY=api "
+                "(default in newer builds) on the API service and redeploy."
+            )
+        raise HTTPException(status_code=400, detail=f"Email test failed: {detail}") from exc
     if not ok:
         raise HTTPException(
             status_code=400,

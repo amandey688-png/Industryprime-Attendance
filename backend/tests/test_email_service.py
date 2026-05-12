@@ -25,7 +25,11 @@ def test_send_email_log_mode_skips_postmark(monkeypatch: pytest.MonkeyPatch, cap
     assert any("approver@example.com" in r.message for r in caplog.records)
 
 
-def test_email_delivery_mode_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_postmark_token_accepts_access_key_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("POSTMARK_SERVER_TOKEN", raising=False)
+    monkeypatch.delenv("POSTMARK_SMTP_TOKEN", raising=False)
+    monkeypatch.setenv("POSTMARK_Access_Key", "test-server-token-value")
+    assert email_service.postmark_token_configured()
     monkeypatch.setenv("EMAIL_MODE", "local")
     assert email_service.email_delivery_mode() == "log"
     monkeypatch.setenv("EMAIL_MODE", "postmark")

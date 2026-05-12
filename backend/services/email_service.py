@@ -25,9 +25,10 @@ logger = logging.getLogger(__name__)
 MISSING_POSTMARK_ON_API_HOST_MESSAGE = (
     "Postmark is not configured on the FastAPI server (this is separate from Supabase). "
     "Supabase Dashboard → Authentication → Email/SMTP only affects Supabase Auth emails (e.g. magic links), "
-    "not leave or OTP mail from this app. Set POSTMARK_SERVER_TOKEN or POSTMARK_SMTP_TOKEN plus "
-    "POSTMARK_FROM_EMAIL on the host that runs the API (Render/Railway/backend/.env), then redeploy. "
-    "Or set EMAIL_MODE=log to skip delivery and only log intended recipients (no Postmark required)."
+    "not leave or OTP mail from this app. Set POSTMARK_SERVER_TOKEN (or POSTMARK_SMTP_TOKEN / POSTMARK_Access_Key) "
+    "plus POSTMARK_FROM_EMAIL or SMTP_FROM_EMAIL on the host that runs the API (Render/Railway/backend/.env), "
+    "then redeploy. Use POSTMARK_DELIVERY=api on Render (SMTP port 587 is often blocked). "
+    "Or set EMAIL_MODE=log to log only (no Postmark required)."
 )
 
 _MISSING_POSTMARK_ON_API_HOST = MISSING_POSTMARK_ON_API_HOST_MESSAGE
@@ -71,6 +72,27 @@ def _postmark_server_token() -> str:
         or _env("POSTMARK_SMTP_TOKEN")
         or _env("POSTMARK_SMTP_SECRET_KEY")
         or _env("POSTMARK_SMTP_Secret_key")
+        # Render / dashboards sometimes use these names:
+        or _env("POSTMARK_Access_Key")
+        or _env("POSTMARK_ACCESS_KEY")
+    )
+
+
+def _postmark_from_email() -> str:
+    return (
+        _env("POSTMARK_FROM_EMAIL")
+        or _env("SMTP_FROM_EMAIL")
+        or _env("FROM_EMAIL")
+        or "aman@industryprime.com"
+    )
+
+
+def _postmark_message_stream() -> str:
+    return (
+        _env("POSTMARK_MESSAGE_STREAM")
+        or _env("SMTP_POSTMARK_STREAM")
+        or _env("POSTMARK_STREAM")
+        or "outbound"
     )
 
 
@@ -83,6 +105,8 @@ def _smtp_config() -> Dict[str, str]:
         _env("POSTMARK_SMTP_USERNAME")
         or _env("POSTMARK_SMTP_ACCESS_KEY")
         or _env("POSTMARK_SMTP_Access_Key")
+        or _env("POSTMARK_Access_Key")
+        or _env("POSTMARK_ACCESS_KEY")
         or password
     )
     return {
@@ -221,13 +245,16 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
         else:
             text = f"[Test redirect — intended recipients: {orig_txt}]"
 
-    sender = _env("POSTMARK_FROM_EMAIL", "aman@industryprime.com")
-    stream = _env("POSTMARK_MESSAGE_STREAM", "outbound")
-    # auto: try Postmark HTTPS API first (works when cloud hosts block SMTP 587), then SMTP.
-    # smtp: SMTP only. api: REST only (no fallback).
-    mode = _env("POSTMARK_DELIVERY", "auto").lower()
+    sender = _postmark_from_email()
+    stream = _postmark_message_stream()
+    # Default api: Postmark HTTPS (Render/Fly often block outbound SMTP 587 — avoids "timed out").
+    # auto: same as api (no REST→SMTP fallback; use legacy only if you need that behavior).
+    # smtp: SMTP only. legacy: try REST then SMTP on failure.
+    mode = _env("POSTMARK_DELIVERY", "api").lower()
+    if mode not in ("api", "rest", "http", "auto", "smtp", "legacy"):
+        mode = "api"
 
-    if mode in ("api", "rest", "http"):
+    if mode in ("api", "rest", "http", "auto"):
         _send_postmark_rest(
             recipients=recipients,
             subject=subject,
@@ -239,7 +266,7 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
         logger.info("Postmark REST email sent subject=%s to=%s stream=%s", subject, recipients, stream)
         return True
 
-    if mode not in ("smtp", "legacy") and _postmark_server_token():
+    if mode == "legacy":
         try:
             _send_postmark_rest(
                 recipients=recipients,
@@ -252,7 +279,7 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
             logger.info("Postmark REST email sent subject=%s to=%s stream=%s", subject, recipients, stream)
             return True
         except Exception as exc:
-            logger.warning("Postmark REST send failed, falling back to SMTP: %s", exc)
+            logger.warning("Postmark REST send failed, falling back to SMTP (POSTMARK_DELIVERY=legacy): %s", exc)
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -282,6 +309,12 @@ def send_email(to: str | list[str], subject: str, html: str, text: Optional[str]
             if i < attempts - 1 and transient:
                 time.sleep(0.6)
                 continue
+            if "timeout" in exc_text:
+                raise RuntimeError(
+                    "Postmark SMTP connection timed out (common on Render when port 587 is blocked). "
+                    "Set POSTMARK_DELIVERY=api (default) or remove POSTMARK_DELIVERY=smtp from the API host env, "
+                    "then redeploy."
+                ) from exc
             raise
 
     if last_exc:
