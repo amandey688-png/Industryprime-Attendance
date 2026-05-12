@@ -12,6 +12,12 @@ class EmployeeCreate(BaseModel):
     designation: Optional[str] = Field(default=None, max_length=200)
     email: Optional[str] = Field(default=None, max_length=200)
     salary_monthly: Optional[float] = Field(default=None, ge=0)
+    professional_tax: Optional[float] = Field(default=None, ge=0)
+    pf_employee_monthly: Optional[float] = Field(default=None, ge=0)
+    income_tax_tds_monthly: Optional[float] = Field(default=None, ge=0)
+    hra_monthly: Optional[float] = Field(default=None, ge=0)
+    conveyance_monthly: Optional[float] = Field(default=None, ge=0)
+    special_allowance_monthly: Optional[float] = Field(default=None, ge=0)
 
 
 class EmployeeUpdate(BaseModel):
@@ -21,6 +27,18 @@ class EmployeeUpdate(BaseModel):
     designation: Optional[str] = Field(default=None, max_length=200)
     email: Optional[str] = Field(default=None, max_length=200)
     salary_monthly: Optional[float] = Field(default=None, ge=0)
+    professional_tax: Optional[float] = Field(default=None, ge=0)
+    pf_employee_monthly: Optional[float] = Field(default=None, ge=0)
+    income_tax_tds_monthly: Optional[float] = Field(default=None, ge=0)
+    hra_monthly: Optional[float] = Field(default=None, ge=0)
+    conveyance_monthly: Optional[float] = Field(default=None, ge=0)
+    special_allowance_monthly: Optional[float] = Field(default=None, ge=0)
+
+
+class EmployeeAllowancesSelfUpdate(BaseModel):
+    hra_monthly: Optional[float] = Field(default=None, ge=0)
+    conveyance_monthly: Optional[float] = Field(default=None, ge=0)
+    special_allowance_monthly: Optional[float] = Field(default=None, ge=0)
 
 
 class EmployeeOut(BaseModel):
@@ -32,5 +50,11 @@ class EmployeeOut(BaseModel):
     department: Optional[str] = None
     designation: Optional[str] = None
     salary_monthly: Optional[float] = None
+    professional_tax: Optional[float] = None
+    pf_employee_monthly: Optional[float] = None
+    income_tax_tds_monthly: Optional[float] = None
+    hra_monthly: Optional[float] = None
+    conveyance_monthly: Optional[float] = None
+    special_allowance_monthly: Optional[float] = None
 
     model_config = {"extra": "ignore"}

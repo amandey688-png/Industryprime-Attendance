@@ -5,6 +5,81 @@ from typing import Any, Dict, List, Optional
 
 from database.supabase_client import SupabaseRest, get_supabase
 
+from services.leave_balance_attendance_service import compute_absent_leave_used_by_employee
+
+# Fallback annual entitlement when no `leave_balances` row exists (email not in map).
+DEFAULT_ANNUAL_TOTAL_LEAVE = 23.0
+
+# Known allocation (CL+SL) when there is no DB row — keep in sync with leave_balances_seed_by_email.sql.
+_DEFAULT_TOTAL_LEAVE_BY_EMAIL: Dict[str, float] = {
+    "ea@industryprime.com": 16.0,
+    "aman@industryprime.com": 21.0,
+    "rimpa@industryprime.com": 21.0,
+    "shreyasi@industryprime.com": 20.0,
+    "akash@industryprime.com": 20.0,
+    "adrija@industryprime.com": 0.0,
+}
+
+
+def _total_leave_for_employee(
+    employee: Dict[str, Any],
+    balance_row: Optional[Dict[str, Any]],
+) -> float:
+    """DB row wins if present; else per-email default; else DEFAULT_ANNUAL_TOTAL_LEAVE."""
+    if balance_row is not None:
+        return float(balance_row.get("total_leave") or 0)
+    email = str(employee.get("email") or "").strip().lower()
+    if email in _DEFAULT_TOTAL_LEAVE_BY_EMAIL:
+        return float(_DEFAULT_TOTAL_LEAVE_BY_EMAIL[email])
+    return float(DEFAULT_ANNUAL_TOTAL_LEAVE)
+
+
+def get_allocated_total_leave(employee: Dict[str, Any], balance_row: Optional[Dict[str, Any]]) -> float:
+    """Public accessor for allocation used by routers and attendance leave balance."""
+    return _total_leave_for_employee(employee, balance_row)
+
+
+def _is_missing_days_column(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "leave_requests" in msg and "days" in msg and ("schema cache" in msg or "could not find" in msg)
+
+
+def _is_missing_employee_id_column(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "leave_requests" in msg and "employee_id" in msg and ("schema cache" in msg or "could not find" in msg)
+
+
+def _resolve_valid_tenant_id(supabase: SupabaseRest, tenant_id: Optional[str]) -> Optional[str]:
+    """
+    Ensure tenant_id satisfies leave_requests_tenant_id_fkey when tenants table exists.
+    - If provided tenant exists, keep it.
+    - Else fallback to first tenant row (single-tenant deployments).
+    - If tenants table is unavailable, keep original value.
+    """
+    if not tenant_id:
+        return tenant_id
+    try:
+        existing = supabase.select(
+            table="tenants",
+            select="id",
+            where_eq={"id": tenant_id},
+            limit=1,
+        )
+        if existing and existing[0].get("id"):
+            return str(existing[0]["id"])
+        fallback = supabase.select(
+            table="tenants",
+            select="id",
+            order="id.asc",
+            limit=1,
+        )
+        if fallback and fallback[0].get("id"):
+            return str(fallback[0]["id"])
+        return tenant_id
+    except Exception:
+        # Keep backward compatibility for schemas without tenants table.
+        return tenant_id
+
 
 def list_leave_requests(status: Optional[str] = None) -> List[Dict[str, Any]]:
     return list_leave_requests_for_tenant(status=status, tenant_id=None, supabase=None)
@@ -85,6 +160,7 @@ def _leave_days(row: Dict[str, Any]) -> float:
 
 def list_leave_summary(
     year: int,
+    month: int,
     user_email: str,
     role: str,
     supabase: SupabaseRest,
@@ -122,15 +198,23 @@ def list_leave_summary(
 
     balances_by_employee = {str(row.get("employee_id")): row for row in balances}
 
+    absent_used, period_cap = compute_absent_leave_used_by_employee(
+        supabase,
+        set(employee_by_id.keys()),
+        month,
+        year,
+    )
+
     output: List[Dict[str, Any]] = []
     for emp_id, employee in employee_by_id.items():
         emp_requests = requests_by_employee.get(emp_id, [])
-        total_used = round(
-            sum(_leave_days(row) for row in emp_requests if str(row.get("status") or "").lower() == "approved"),
-            2,
-        )
-        balance = balances_by_employee.get(emp_id) or {}
-        total_leave = float(balance.get("total_leave") or 0)
+        balance_row = balances_by_employee.get(emp_id)
+        total_leave = get_allocated_total_leave(employee, balance_row)
+        total_used = float(absent_used.get(emp_id, 0))
+        raw_balance = float(total_leave) - total_used
+        balance_leave = max(0.0, round(raw_balance, 2))
+        lop_days = max(0.0, round(total_used - float(total_leave), 2))
+        leave_exhausted = balance_leave == 0 and float(total_leave) > 0 and total_used > 0
         output.append(
             {
                 "employee": {
@@ -140,9 +224,14 @@ def list_leave_summary(
                     "email": employee.get("email"),
                 },
                 "year": year,
+                "month": month,
                 "total_leave": total_leave,
                 "total_used_leave": total_used,
-                "balance_leave": round(total_leave - total_used, 2),
+                "total_used": total_used,
+                "balance_leave": balance_leave,
+                "lop_days": lop_days,
+                "leave_exhausted": leave_exhausted,
+                "attendance_period_end": period_cap.get(emp_id),
                 "requests": emp_requests,
             }
         )
@@ -166,9 +255,12 @@ def create_leave_request(
     leave_type: str,
     reason: str,
     supabase: SupabaseRest,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    tenant_id = _resolve_valid_tenant_id(supabase, tenant_id)
     days = max(1, (leave_date_end - leave_date_start).days + 1)
-    payload = {
+    payload_full = {
+        "tenant_id": tenant_id,
         "employee_id": employee["id"],
         "employee_code": employee.get("employee_code"),
         "leave_date_start": leave_date_start.isoformat(),
@@ -178,12 +270,58 @@ def create_leave_request(
         "status": "pending",
         "days": days,
     }
+    payload_no_days = {
+        "tenant_id": tenant_id,
+        "employee_id": employee["id"],
+        "employee_code": employee.get("employee_code"),
+        "leave_date_start": leave_date_start.isoformat(),
+        "leave_date_end": leave_date_end.isoformat(),
+        "leave_type": leave_type,
+        "reason": reason,
+        "status": "pending",
+    }
+    payload_legacy = {
+        "tenant_id": tenant_id,
+        "employee_code": employee.get("employee_code"),
+        "leave_date_start": leave_date_start.isoformat(),
+        "leave_date_end": leave_date_end.isoformat(),
+        "leave_type": leave_type,
+        "reason": reason,
+        "status": "pending",
+    }
+    if not tenant_id:
+        payload_full.pop("tenant_id", None)
+        payload_no_days.pop("tenant_id", None)
+        payload_legacy.pop("tenant_id", None)
+    attempts = [payload_full, payload_no_days, payload_legacy]
+    try:
+        for idx, payload in enumerate(attempts):
+            try:
+                rows = supabase.insert_many(
+                    table="leave_requests",
+                    rows=[payload],
+                    return_representation=True,
+                )
+                return rows[0] if rows else payload
+            except RuntimeError as exc:
+                is_last = idx == len(attempts) - 1
+                if not is_last and (
+                    _is_missing_days_column(exc) or _is_missing_employee_id_column(exc)
+                ):
+                    continue
+                raise
+    except RuntimeError:
+        raise
+    except Exception:
+        raise
+
+    # Unreachable in normal flow; kept for type completeness.
     rows = supabase.insert_many(
         table="leave_requests",
-        rows=[payload],
+        rows=[payload_legacy],
         return_representation=True,
     )
-    return rows[0] if rows else payload
+    return rows[0] if rows else payload_legacy
 
 
 def update_leave_allocation(

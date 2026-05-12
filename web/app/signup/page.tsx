@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signup } from "@/lib/auth";
+import { signupStart } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -25,9 +25,9 @@ export default function SignupPage() {
     setError(null);
     setInfo(null);
     try {
-      await signup(name.trim(), email.trim(), password);
-      setInfo("Account created with User role. You can now login.");
-      setTimeout(() => router.replace("/login"), 700);
+      const res = await signupStart(name.trim(), email.trim(), password);
+      setInfo("Verification code sent to your email.");
+      setTimeout(() => router.replace(`/signup/verify?email=${encodeURIComponent(res.email)}`), 400);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
@@ -64,7 +64,7 @@ export default function SignupPage() {
                   Create account
                 </h1>
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Signup creates a User role only
+                  Signup requires OTP verification
                 </p>
               </div>
             </div>
@@ -139,7 +139,7 @@ export default function SignupPage() {
               disabled={!canSubmit || loading}
               className="h-11 w-full rounded-2xl bg-emerald-600 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Creating account..." : "Signup"}
+              {loading ? "Sending code..." : "Continue"}
             </button>
           </form>
         </div>

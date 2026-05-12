@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { getStoredUser, type AuthUser } from "@/lib/auth";
 
@@ -13,6 +13,12 @@ type Employee = {
   designation?: string | null;
   email?: string | null;
   salary_monthly?: number | null;
+  professional_tax?: number | null;
+  pf_employee_monthly?: number | null;
+  income_tax_tds_monthly?: number | null;
+  hra_monthly?: number | null;
+  conveyance_monthly?: number | null;
+  special_allowance_monthly?: number | null;
 };
 
 type EmployeeForm = {
@@ -22,6 +28,12 @@ type EmployeeForm = {
   department: string;
   designation: string;
   salary_monthly: string;
+  professional_tax: string;
+  pf_employee_monthly: string;
+  income_tax_tds_monthly: string;
+  hra_monthly: string;
+  conveyance_monthly: string;
+  special_allowance_monthly: string;
 };
 
 const emptyForm: EmployeeForm = {
@@ -31,7 +43,25 @@ const emptyForm: EmployeeForm = {
   department: "",
   designation: "",
   salary_monthly: "",
+  professional_tax: "",
+  pf_employee_monthly: "",
+  income_tax_tds_monthly: "",
+  hra_monthly: "",
+  conveyance_monthly: "",
+  special_allowance_monthly: "",
 };
+
+function numToStr(v: number | null | undefined) {
+  if (v == null || v === undefined) return "";
+  return String(v);
+}
+
+function strToNumNullable(s: string): number | null {
+  const t = s.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
 
 function formFromEmployee(row: Employee): EmployeeForm {
   return {
@@ -40,7 +70,13 @@ function formFromEmployee(row: Employee): EmployeeForm {
     email: row.email || "",
     department: row.department || "",
     designation: row.designation || "",
-    salary_monthly: row.salary_monthly == null ? "" : String(row.salary_monthly),
+    salary_monthly: numToStr(row.salary_monthly),
+    professional_tax: numToStr(row.professional_tax),
+    pf_employee_monthly: numToStr(row.pf_employee_monthly),
+    income_tax_tds_monthly: numToStr(row.income_tax_tds_monthly),
+    hra_monthly: numToStr(row.hra_monthly),
+    conveyance_monthly: numToStr(row.conveyance_monthly),
+    special_allowance_monthly: numToStr(row.special_allowance_monthly),
   };
 }
 
@@ -60,6 +96,12 @@ function toPayload(form: EmployeeForm) {
     department: form.department.trim() || null,
     designation: form.designation.trim() || null,
     salary_monthly: form.salary_monthly.trim() ? Number(form.salary_monthly) : null,
+    professional_tax: strToNumNullable(form.professional_tax),
+    pf_employee_monthly: strToNumNullable(form.pf_employee_monthly),
+    income_tax_tds_monthly: strToNumNullable(form.income_tax_tds_monthly),
+    hra_monthly: strToNumNullable(form.hra_monthly),
+    conveyance_monthly: strToNumNullable(form.conveyance_monthly),
+    special_allowance_monthly: strToNumNullable(form.special_allowance_monthly),
   };
 }
 
@@ -182,16 +224,25 @@ export default function EmployeesPage() {
       {showAddForm && canManageEmployees && (
         <form onSubmit={createEmployee} className="rounded-3xl border border-zinc-200/70 bg-white/75 p-5 shadow-sm backdrop-blur transition hover:shadow-md dark:border-zinc-800/70 dark:bg-zinc-950/40">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Add Working Employee</h3>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Code is auto generated. Salary and all employee details can be edited later.</p>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Code is auto generated. Salary and payslip fields can be edited later.</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <Field label="Code"><div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/70 px-3 py-2 text-sm font-semibold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-400">Auto generated</div></Field>
             <Field label="AT-Div-Code"><FormInput value={form.at_div_code} placeholder="AT-DIV-001" onChange={(value) => setForm((state) => ({ ...state, at_div_code: value }))} /></Field>
             <Field label="Name"><FormInput value={form.name} placeholder="Employee name" onChange={(value) => setForm((state) => ({ ...state, name: value }))} /></Field>
             <Field label="Email"><FormInput type="email" value={form.email} placeholder="employee@company.com" onChange={(value) => setForm((state) => ({ ...state, email: value }))} /></Field>
             <Field label="Department"><FormInput value={form.department} placeholder="Operations" onChange={(value) => setForm((state) => ({ ...state, department: value }))} /></Field>
-            <Field label="Salary"><FormInput type="number" value={form.salary_monthly} placeholder="35000" onChange={(value) => setForm((state) => ({ ...state, salary_monthly: value }))} /></Field>
+            <Field label="Monthly salary"><FormInput type="number" value={form.salary_monthly} placeholder="35000" onChange={(value) => setForm((state) => ({ ...state, salary_monthly: value }))} /></Field>
           </div>
           <div className="mt-4"><Field label="Designation"><FormInput value={form.designation} placeholder="Supervisor" onChange={(value) => setForm((state) => ({ ...state, designation: value }))} /></Field></div>
+          <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">Admin — statutory (optional)</div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <Field label="Professional tax (monthly)"><FormInput type="number" value={form.professional_tax} placeholder="Leave blank" onChange={(value) => setForm((s) => ({ ...s, professional_tax: value }))} /></Field>
+              <Field label="PF deduction (monthly ₹)"><FormInput type="number" value={form.pf_employee_monthly} placeholder="Leave blank" onChange={(value) => setForm((s) => ({ ...s, pf_employee_monthly: value }))} /></Field>
+              <Field label="Income tax / TDS (monthly)"><FormInput type="number" value={form.income_tax_tds_monthly} placeholder="Leave blank" onChange={(value) => setForm((s) => ({ ...s, income_tax_tds_monthly: value }))} /></Field>
+            </div>
+            <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">HRA, conveyance, and special allowance can be added after save using Edit on this table.</div>
+          </div>
           <div className="mt-4 flex justify-end gap-3">
             <button type="button" onClick={() => { setForm(emptyForm); setShowAddForm(false); }} className="rounded-2xl border border-zinc-200 bg-white/70 px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-white dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-200">Cancel</button>
             <button type="submit" disabled={!isValidForm(form) || saving} className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Adding..." : "Save Employee"}</button>
@@ -205,19 +256,39 @@ export default function EmployeesPage() {
       {loading ? <LoadingCard /> : (
         <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white/70 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/40">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40"><tr>{["Code", "AT-Div-Code", "Employee", "Email", "Department", "Salary", "Actions"].map((title) => <th key={title} className="px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-200">{title}</th>)}</tr></thead>
+            <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40"><tr>{["Code", "AT-Div-Code", "Employee", "Email", "Department", "Monthly salary", "Actions"].map((title) => <th key={title} className="px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-200">{title}</th>)}</tr></thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {filtered.map((row) => {
                 const editing = editingId === row.id;
-                return <tr key={row.id || row.employee_code} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 align-top font-mono text-xs">{row.employee_code}</td>
-                  <td className="px-4 py-3 align-top">{editing ? <input className={inputClass} value={editForm.at_div_code} onChange={(e) => setEditForm((state) => ({ ...state, at_div_code: e.target.value }))} /> : <span className="font-mono text-xs">{row.at_div_code || "-"}</span>}</td>
-                  <td className="px-4 py-3 align-top">{editing ? <div className="space-y-2"><input className={inputClass} value={editForm.name} onChange={(e) => setEditForm((state) => ({ ...state, name: e.target.value }))} /><input className={inputClass} placeholder="Designation" value={editForm.designation} onChange={(e) => setEditForm((state) => ({ ...state, designation: e.target.value }))} /></div> : <div><div className="font-semibold text-zinc-900 dark:text-zinc-100">{row.name || "-"}</div><div className="text-xs text-zinc-500 dark:text-zinc-400">{row.designation || "-"}</div></div>}</td>
-                  <td className="px-4 py-3 align-top">{editing ? <input className={inputClass} type="email" value={editForm.email} onChange={(e) => setEditForm((state) => ({ ...state, email: e.target.value }))} /> : row.email || "-"}</td>
-                  <td className="px-4 py-3 align-top">{editing ? <input className={inputClass} value={editForm.department} onChange={(e) => setEditForm((state) => ({ ...state, department: e.target.value }))} /> : row.department || "-"}</td>
-                  <td className="px-4 py-3 align-top">{editing ? <input className={inputClass} type="number" min="0" value={editForm.salary_monthly} onChange={(e) => setEditForm((state) => ({ ...state, salary_monthly: e.target.value }))} /> : row.salary_monthly != null ? <span className="font-semibold text-emerald-700 dark:text-emerald-300">{Number(row.salary_monthly).toLocaleString()}</span> : "-"}</td>
-                  <td className="px-4 py-3 align-top">{canManageEmployees && editing ? <div className="flex gap-2"><button type="button" disabled={!isValidForm(editForm) || saving} onClick={() => void saveEmployee(row)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60">Save</button><button type="button" onClick={() => setEditingId(null)} className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">Cancel</button></div> : canManageEmployees ? <button type="button" onClick={() => startEdit(row)} className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-emerald-300 hover:bg-emerald-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">Edit</button> : "-"}</td>
-                </tr>;
+                return (
+                  <Fragment key={row.id || row.employee_code}>
+                    <tr className="text-zinc-800 dark:text-zinc-200">
+                      <td className="px-4 py-3 align-top font-mono text-xs">{row.employee_code}</td>
+                      <td className="px-4 py-3 align-top">{editing ? <input className={inputClass} value={editForm.at_div_code} onChange={(e) => setEditForm((state) => ({ ...state, at_div_code: e.target.value }))} /> : <span className="font-mono text-xs">{row.at_div_code || "-"}</span>}</td>
+                      <td className="px-4 py-3 align-top">{editing ? <div className="space-y-2"><input className={inputClass} value={editForm.name} onChange={(e) => setEditForm((state) => ({ ...state, name: e.target.value }))} /><input className={inputClass} placeholder="Designation" value={editForm.designation} onChange={(e) => setEditForm((state) => ({ ...state, designation: e.target.value }))} /></div> : <div><div className="font-semibold text-zinc-900 dark:text-zinc-100">{row.name || "-"}</div><div className="text-xs text-zinc-500 dark:text-zinc-400">{row.designation || "-"}</div></div>}</td>
+                      <td className="px-4 py-3 align-top">{editing ? <input className={inputClass} type="email" value={editForm.email} onChange={(e) => setEditForm((state) => ({ ...state, email: e.target.value }))} /> : row.email || "-"}</td>
+                      <td className="px-4 py-3 align-top">{editing ? <input className={inputClass} value={editForm.department} onChange={(e) => setEditForm((state) => ({ ...state, department: e.target.value }))} /> : row.department || "-"}</td>
+                      <td className="px-4 py-3 align-top">{editing ? <input className={inputClass} type="number" min="0" value={editForm.salary_monthly} onChange={(e) => setEditForm((state) => ({ ...state, salary_monthly: e.target.value }))} /> : row.salary_monthly != null ? <span className="font-semibold text-emerald-700 dark:text-emerald-300">{Number(row.salary_monthly).toLocaleString()}</span> : "-"}</td>
+                      <td className="px-4 py-3 align-top">{canManageEmployees && editing ? <div className="flex gap-2"><button type="button" disabled={!isValidForm(editForm) || saving} onClick={() => void saveEmployee(row)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60">Save</button><button type="button" onClick={() => setEditingId(null)} className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">Cancel</button></div> : canManageEmployees ? <button type="button" onClick={() => startEdit(row)} className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-emerald-300 hover:bg-emerald-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">Edit</button> : "-"}</td>
+                    </tr>
+                    {editing && canManageEmployees ? (
+                      <tr className="bg-zinc-50/90 dark:bg-zinc-900/50">
+                        <td colSpan={7} className="px-4 py-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">Payslip — admin fields</div>
+                          <div className="mt-3 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                            <Field label="Professional tax (monthly)"><FormInput type="number" value={editForm.professional_tax} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, professional_tax: v }))} /></Field>
+                            <Field label="PF (monthly ₹)"><FormInput type="number" value={editForm.pf_employee_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, pf_employee_monthly: v }))} /></Field>
+                            <Field label="TDS (monthly)"><FormInput type="number" value={editForm.income_tax_tds_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, income_tax_tds_monthly: v }))} /></Field>
+                            <Field label="HRA (monthly)"><FormInput type="number" value={editForm.hra_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, hra_monthly: v }))} /></Field>
+                            <Field label="Conveyance"><FormInput type="number" value={editForm.conveyance_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, conveyance_monthly: v }))} /></Field>
+                            <Field label="Special allowance"><FormInput type="number" value={editForm.special_allowance_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, special_allowance_monthly: v }))} /></Field>
+                          </div>
+                          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">These allowance fields are maintained here (admin).</p>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
               })}
               {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">No results</td></tr>}
             </tbody>

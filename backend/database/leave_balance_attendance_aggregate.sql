@@ -1,0 +1,6 @@
+-- Optional production optimization: materialized / RPC aggregation for absent counts.
+-- The FastAPI app currently aggregates in services/leave_balance_attendance_service.py
+-- (one filtered attendance query per month + holiday lookup). For very large datasets,
+-- consider a Postgres function that JOINs attendance with holidays and filters
+-- status = 'A', EXTRACT(DOW) <> 0, date <= LEAST(CURRENT_DATE, p_month_end), etc.
+-- Wire it via Supabase RPC from the Python client if you add an rpc() helper.

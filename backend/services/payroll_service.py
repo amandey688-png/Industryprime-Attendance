@@ -5,7 +5,10 @@ from datetime import date
 from typing import Any, Dict, List
 
 from database.supabase_client import SupabaseRest, get_supabase
-from services.working_hours import hhmm_value_to_minutes, minutes_to_hhmm_float
+from services.leave_balance_attendance_service import compute_absent_leave_used_by_employee
+from services.payroll_attendance_summary_service import compute_payroll_attendance_metrics
+from services.payslip_service import compute_payslip
+from services.working_hours import minutes_to_hhmm_float
 
 
 def generate_payroll(
@@ -48,23 +51,6 @@ def generate_payroll(
         }
 
 
-def _month_bounds(month: int, year: int) -> tuple[date, date]:
-    last_day = calendar.monthrange(year, month)[1]
-    return date(year, month, 1), date(year, month, last_day)
-
-
-def _leave_days(row: Dict[str, Any]) -> float:
-    if row.get("days") is not None:
-        return float(row.get("days") or 0)
-    start_raw = row.get("leave_date_start") or row.get("start_date")
-    end_raw = row.get("leave_date_end") or row.get("end_date") or start_raw
-    if not start_raw:
-        return 0
-    start = date.fromisoformat(str(start_raw)[:10])
-    end = date.fromisoformat(str(end_raw)[:10])
-    return float(max(0, (end - start).days + 1))
-
-
 def _is_admin(role: str) -> bool:
     return role in {"master_admin", "admin"}
 
@@ -76,12 +62,7 @@ def summarize_payroll(
     role: str,
     supabase: SupabaseRest,
 ) -> Dict[str, Any]:
-    start, end = _month_bounds(month, year)
-    total_days = 30
-    total_sundays = sum(
-        1 for day in range(1, calendar.monthrange(year, month)[1] + 1)
-        if date(year, month, day).weekday() == 6
-    )
+    cal_days = calendar.monthrange(year, month)[1]
 
     employees = supabase.select(
         table="employees",
@@ -94,70 +75,63 @@ def summarize_payroll(
         employees = [row for row in employees if str(row.get("email") or "").strip().lower() == clean_email]
 
     employee_by_id = {str(row.get("id")): row for row in employees}
-    employee_codes = {str(row.get("employee_code") or ""): row for row in employees}
+    emp_id_set = set(employee_by_id.keys())
 
-    attendance_rows = supabase.select(
-        table="attendance",
-        select="*",
-        where_gte={"date": start.isoformat()},
-        where_lte={"date": end.isoformat()},
-        order="date.asc",
+    metrics_by_eid, _ = compute_payroll_attendance_metrics(
+        supabase,
+        emp_id_set,
+        month,
+        year,
     )
-
-    attendance_by_employee: Dict[str, List[Dict[str, Any]]] = {emp_id: [] for emp_id in employee_by_id}
-    for row in attendance_rows:
-        emp_id = str(row.get("employee_id") or "")
-        if emp_id in attendance_by_employee:
-            attendance_by_employee[emp_id].append(row)
-
-    try:
-        leave_rows = supabase.select(
-            table="leave_requests",
-            select="*",
-            where_gte={"leave_date_start": start.isoformat()},
-            where_lte={"leave_date_start": end.isoformat()},
-            order="leave_date_start.asc",
-        )
-    except Exception:
-        leave_rows = []
+    leave_total_used_days, _ = compute_absent_leave_used_by_employee(
+        supabase,
+        emp_id_set,
+        month,
+        year,
+    )
 
     try:
         balance_rows = supabase.select(table="leave_balances", select="*", where_eq={"year": year})
     except Exception:
         balance_rows = []
 
-    leave_by_employee: Dict[str, List[Dict[str, Any]]] = {emp_id: [] for emp_id in employee_by_id}
-    for row in leave_rows:
-        emp_id = str(row.get("employee_id") or "")
-        if not emp_id and row.get("employee_code") is not None:
-            emp = employee_codes.get(str(row.get("employee_code") or ""))
-            emp_id = str(emp.get("id")) if emp else ""
-        if emp_id in leave_by_employee:
-            leave_by_employee[emp_id].append(row)
-
     balances_by_employee = {str(row.get("employee_id")): row for row in balance_rows}
 
     summaries: List[Dict[str, Any]] = []
     for emp_id, employee in employee_by_id.items():
-        rows = attendance_by_employee.get(emp_id, [])
-        present_rows = [row for row in rows if row.get("check_in") and row.get("check_out")]
-        total_minutes = sum(hhmm_value_to_minutes(row.get("working_hours")) for row in rows)
+        m = metrics_by_eid.get(emp_id, {})
+        present = int(m.get("present_days") or 0)
+        absent_attendance = int(m.get("absent_days") or 0)
+        # Same absent-day count as Leave "Total Used" (attendance‑based via leave_balance_attendance_service).
+        absent = int(leave_total_used_days.get(emp_id, 0))
+        weekoff_days = int(m.get("weekoff_days") or 0)
+        holiday_days = int(m.get("holiday_days") or 0)
+        salary_eligible_days = float(m.get("salary_eligible_days") or 0)
+        total_minutes = int(m.get("total_working_minutes") or 0)
         total_hours = minutes_to_hhmm_float(total_minutes)
-        present = len({str(row.get("date"))[:10] for row in present_rows})
-        holidays = 0
-        absent = max(0, total_days - total_sundays - holidays - present)
-        monthly_salary = float(employee.get("salary_monthly") or 0)
-        salary_per_day = round(monthly_salary / total_days, 2) if total_days else 0
-        deductions = round(absent * salary_per_day, 2)
-        payable = round(monthly_salary - deductions, 2)
 
-        emp_leave_rows = leave_by_employee.get(emp_id, [])
-        used_leave = round(
-            sum(_leave_days(row) for row in emp_leave_rows if str(row.get("status") or "").lower() == "approved"),
-            2,
-        )
+        monthly_salary = float(employee.get("salary_monthly") or 0)
+        divisor = float(cal_days)
+        salary_per_day = round(monthly_salary / divisor, 2) if divisor else 0
+        payable = round(salary_per_day * salary_eligible_days, 2)
+        deductions = max(0.0, round(monthly_salary - payable, 2))
+
+        used_leave = round(float(absent), 2)
         balance = balances_by_employee.get(emp_id) or {}
         total_leave = float(balance.get("total_leave") or 0)
+
+        payslip = compute_payslip(
+            employee,
+            month=month,
+            year=year,
+            calendar_days=cal_days,
+            present_days=present,
+            absent_attendance_days=absent_attendance,
+            weekoff_days=weekoff_days,
+            holiday_days=holiday_days,
+            salary_eligible_days=salary_eligible_days,
+            monthly_salary=monthly_salary,
+        )
 
         summaries.append(
             {
@@ -169,15 +143,26 @@ def summarize_payroll(
                     "department": employee.get("department"),
                     "designation": employee.get("designation"),
                     "salary_monthly": monthly_salary,
+                    "professional_tax": employee.get("professional_tax"),
+                    "pf_employee_monthly": employee.get("pf_employee_monthly"),
+                    "income_tax_tds_monthly": employee.get("income_tax_tds_monthly"),
+                    "hra_monthly": employee.get("hra_monthly"),
+                    "conveyance_monthly": employee.get("conveyance_monthly"),
+                    "special_allowance_monthly": employee.get("special_allowance_monthly"),
                 },
                 "month": month,
                 "year": year,
-                "total_days": total_days,
+                "total_days": cal_days,
                 "total_days_present": present,
                 "total_days_absent": absent,
+                "attendance_absent_days": absent_attendance,
+                "weekoff_days": weekoff_days,
+                "holiday_days": holiday_days,
+                "salary_eligible_days": salary_eligible_days,
+                "attendance_period_end": m.get("attendance_period_end"),
                 "total_hours_in_office": total_hours,
-                "total_sundays": total_sundays,
-                "holidays": holidays,
+                "total_sundays": weekoff_days,
+                "holidays": holiday_days,
                 "salary_per_day": salary_per_day,
                 "total_salary": monthly_salary,
                 "deductions": deductions,
@@ -186,9 +171,8 @@ def summarize_payroll(
                     "total_leave": total_leave,
                     "total_used_leave": used_leave,
                     "balance_leave": round(total_leave - used_leave, 2),
-                    "requests": emp_leave_rows,
                 },
-                "attendance": rows,
+                "payslip": payslip,
             }
         )
 

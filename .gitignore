@@ -1,4 +1,7 @@
 backend/.env
+backend/.coverage
+.coverage
+test-results/
 backend/database/dev_auth_users.json
 backend/.venv/
 backend/**/__pycache__/

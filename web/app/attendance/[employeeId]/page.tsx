@@ -346,6 +346,7 @@ export default function AttendanceDetailPage() {
         }),
       });
       setRows((items) => items.map((item) => (item.date === updated.date ? updated : item)));
+      window.dispatchEvent(new Event("industryprime-attendance-change"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save attendance");
     } finally {

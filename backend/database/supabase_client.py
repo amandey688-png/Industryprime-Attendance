@@ -57,11 +57,12 @@ def _bootstrap_backend_env() -> None:
     try:
         from dotenv import load_dotenv
 
-        load_dotenv(env_path, encoding="utf-8")
+        # Never override explicit process env, but always import missing keys from backend/.env
+        load_dotenv(env_path, encoding="utf-8", override=False)
     except Exception:
         pass
-    if not os.getenv("SUPABASE_URL", "").strip():
-        _parse_env_file(env_path)
+    # Always parse fallback too, so keys beyond SUPABASE_* (SMTP, JWT, etc.) are loaded.
+    _parse_env_file(env_path)
     _ENV_BOOTSTRAPPED = True
 
 
@@ -222,6 +223,25 @@ class SupabaseRest:
         if isinstance(data, list):
             return data[0] if data else None
         return data
+
+    def delete_many(
+        self,
+        table: str,
+        where_eq: Dict[str, Any],
+    ) -> int:
+        params: Dict[str, Any] = {}
+        for k, v in where_eq.items():
+            params[k] = f"eq.{v}"
+        headers = dict(self.headers)
+        headers["Prefer"] = "return=minimal"
+        resp = requests.delete(
+            f"{self.rest_base}/{table}",
+            headers=headers,
+            params=params,
+            timeout=30,
+        )
+        self._handle_response(resp)
+        return 1
 
 
 @lru_cache(maxsize=1)

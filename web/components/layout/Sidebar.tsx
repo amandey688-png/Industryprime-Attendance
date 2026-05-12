@@ -64,7 +64,7 @@ export default function Sidebar({
       { label: "Leave", href: "/leave", icon: IconClipboardList },
       { label: "Payroll", href: "/payroll", icon: IconWallet },
       { label: "Reports", href: "/reports", icon: IconBarChart },
-      { label: "Settings", href: "/settings", icon: IconSettings },
+      { label: "Settings", href: "/settings", icon: IconSettings, roles: ["master_admin"] },
     ],
     []
   );

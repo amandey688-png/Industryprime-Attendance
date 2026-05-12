@@ -51,6 +51,31 @@ export async function apiFetch<T = any>(
   return (await res.json()) as T;
 }
 
+export async function apiFetchBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const token = await getAccessToken();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const raw = effectiveApiBase();
+  const base = raw.endsWith("/") ? raw.slice(0, -1) : raw;
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const url = `${base}${p}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, headers });
+  } catch (e) {
+    const hint =
+      " Check that FastAPI is running and `next.config.ts` rewrites `/api` → your API (or set NEXT_PUBLIC_API_URL to match this page’s origin). " +
+      `Tried base: ${raw}. Try: cd backend && uvicorn main:app --reload`;
+    throw new Error((e instanceof Error ? e.message : "Failed to fetch") + "." + hint);
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || res.statusText);
+  }
+  return res.blob();
+}
+
 /**
  * Public `/attendance-entry` calls must use same-origin `/api` so Next.js rewrites
  * reach FastAPI without CORS. Do not use `NEXT_PUBLIC_API_URL` here — localhost vs

@@ -3,11 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node -e \"try{require('fs').rmSync('.next',{ recursive:true, force:true, maxRetries:5, retryDelay:200 });}catch(e){console.warn('skip .next cleanup:', e?.code || e?.message)}\"",
+    "clean:next": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true,maxRetries:10,retryDelay:250});console.log('Removed .next');}catch(e){console.warn('clean:next:',e?.code||e?.message)}\"",
     "dev": "node --max-old-space-size=8192 ./node_modules/next/dist/bin/next dev --webpack --port 3000",
+    "dev:fresh": "npm run clean:next && npm run dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:ci": "npm run lint && npm run build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
@@ -16,6 +20,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
