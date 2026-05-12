@@ -8,7 +8,7 @@ import os
 from fastapi import APIRouter, Body, HTTPException, Path, Query, Header
 from pydantic import BaseModel, Field
 
-from database.supabase_client import _bootstrap_backend_env, get_supabase_service
+from database.supabase_client import _bootstrap_backend_env, get_supabase_service, get_supabase_user
 from services.leave_balance_attendance_service import calculate_user_leave_balance
 from services.leave_service import (
     create_leave_request,
@@ -20,7 +20,6 @@ from services.leave_service import (
     update_leave_allocation,
 )
 from dependencies.auth_dependency import get_auth_context
-from database.supabase_client import get_supabase_user
 from services.auth_service import require_role
 from services.email_service import render_email_template, send_email
 from services.decision_token_service import make_decision_token, verify_decision_token
@@ -75,21 +74,23 @@ def _notify_leave_recipients(
     *,
     employee: Dict[str, Any],
     leave_row: Dict[str, Any],
-    supabase,
 ) -> None:
     """
     Send leave request emails from legacy `/leave/requests` flow.
+    Uses the service-role Supabase client for `email_lists` so RLS on that table
+    does not hide recipients when the caller is a normal user JWT.
     Does not fail the request if email list table is missing/unmigrated or if SMTP fails.
     """
+    db_lists = get_supabase_service()
     try:
-        approvals = supabase.select(
+        approvals = db_lists.select(
             table="email_lists",
             select="email,name",
             where_eq={"kind": "approval"},
             order="created_at.desc",
             limit=200,
         )
-        notifications = supabase.select(
+        notifications = db_lists.select(
             table="email_lists",
             select="email,name",
             where_eq={"kind": "notification"},
@@ -287,7 +288,7 @@ def create_request(
             ) from e
         raise HTTPException(status_code=400, detail=f"Leave request could not be saved: {e}") from e
 
-    _notify_leave_recipients(employee=employee, leave_row=created, supabase=supabase)
+    _notify_leave_recipients(employee=employee, leave_row=created)
     return created
 
 
