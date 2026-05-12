@@ -134,12 +134,15 @@ def apply_leave(
                     "leave_id": leave_id,
                 },
             )
-            send_email(
+            if not send_email(
                 to_email,
                 subject=f"Leave Approval Request — {applicant_name} ({fd.isoformat()} -> {td.isoformat()})",
                 html=html,
                 text=f"Leave request from {applicant_name}. Approve: {approve_url} Reject: {reject_url}",
-            )
+            ):
+                logger.warning(
+                    "Leave apply: approval email not sent (Postmark not configured on API host or EMAIL_MODE=log only)."
+                )
 
         for r in notification_rows:
             to_email = str(r.get("email") or "").strip().lower()
@@ -155,12 +158,15 @@ def apply_leave(
                     "reason": payload.reason.strip(),
                 },
             )
-            send_email(
+            if not send_email(
                 to_email,
                 subject=f"Leave Applied — {applicant_name} ({fd.isoformat()} -> {td.isoformat()})",
                 html=html,
                 text=f"FYI: Leave applied by {applicant_name} for {fd.isoformat()} to {td.isoformat()}",
-            )
+            ):
+                logger.warning(
+                    "Leave apply: notification email not sent (Postmark not configured on API host or send skipped)."
+                )
     except Exception as exc:
         logger.error(
             "Leave saved but email/token notify failed — POSTMARK_* on API host; live token + verified From: %s",
@@ -307,12 +313,15 @@ def decide_leave(
                 "remarks": payload.remarks.strip(),
             },
         )
-        send_email(
+        if not send_email(
             applicant_email,
             subject=f"Your leave was {status_value}",
             html=html,
             text=f"Your leave was {status_value}. Remarks: {payload.remarks.strip()}",
-        )
+        ):
+            logger.warning(
+                "Leave decision: applicant email not sent (Postmark not configured on API host)."
+            )
 
     record_audit_event(
         db,

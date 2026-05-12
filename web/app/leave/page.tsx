@@ -157,6 +157,8 @@ export default function LeavePage() {
             emails_sent_approval?: number;
             emails_sent_notification?: number;
             error?: string | null;
+            delivery_mode?: string;
+            delivery_note?: string | null;
           }
         | undefined;
       let msg = "Leave request submitted successfully.";
@@ -164,8 +166,14 @@ export default function LeavePage() {
         const appr = Number(n.emails_sent_approval) || 0;
         const fy = Number(n.emails_sent_notification) || 0;
         const err = n.error ? String(n.error) : "";
+        const note = n.delivery_note ? String(n.delivery_note) : "";
+        const logMode = String(n.delivery_mode || "").toLowerCase() === "log";
         if (err) {
           msg = `Leave saved. Email step: ${err.slice(0, 280)}${err.length > 280 ? "…" : ""}`;
+        } else if (note) {
+          msg = `Leave saved. ${note.slice(0, 420)}${note.length > 420 ? "…" : ""}`;
+        } else if (logMode && appr + fy > 0) {
+          msg = `Leave saved. EMAIL_MODE=log on the server: ${appr} approval + ${fy} FYI would have been sent (see API host logs); not delivered. Set Postmark on the API host or keep log mode for staging.`;
         } else if (appr + fy === 0) {
           msg =
             "Leave saved. No emails were sent (no rows in Email lists, or Postmark/API misconfigured on the server). Check Settings → Email lists and Postmark Activity.";

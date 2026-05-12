@@ -21,7 +21,12 @@ from services.leave_service import (
 )
 from dependencies.auth_dependency import get_auth_context
 from services.auth_service import require_role
-from services.email_service import render_email_template, send_email
+from services.email_service import (
+    email_delivery_mode,
+    postmark_token_configured,
+    render_email_template,
+    send_email,
+)
 from services.decision_token_service import make_decision_token, verify_decision_token
 
 router = APIRouter()
@@ -89,6 +94,8 @@ def _notify_leave_recipients(
         "emails_sent_approval": 0,
         "emails_sent_notification": 0,
         "error": None,
+        "delivery_mode": email_delivery_mode(),
+        "delivery_note": None,
     }
     db_lists = get_supabase_service()
     try:
@@ -139,6 +146,14 @@ def _notify_leave_recipients(
             "Add rows in Settings → Email lists or run SQL against public.email_lists."
         )
 
+    planned_sends = 0
+    for row in approvals or []:
+        if str(row.get("email") or "").strip():
+            planned_sends += 1
+    for row in notifications or []:
+        if str(row.get("email") or "").strip():
+            planned_sends += 1
+
     try:
         for row in approvals or []:
             to_email = str(row.get("email") or "").strip().lower()
@@ -161,13 +176,13 @@ def _notify_leave_recipients(
                     "leave_id": leave_id,
                 },
             )
-            send_email(
+            if send_email(
                 to_email,
                 subject=f"Leave Approval Request — {applicant_name} ({from_date} -> {to_date})",
                 html=html,
                 text=f"Leave request for {applicant_name}: {from_date} -> {to_date}. Approve: {approve_url} Reject: {reject_url}",
-            )
-            summary["emails_sent_approval"] += 1
+            ):
+                summary["emails_sent_approval"] += 1
 
         for row in notifications or []:
             to_email = str(row.get("email") or "").strip().lower()
@@ -183,13 +198,26 @@ def _notify_leave_recipients(
                     "reason": reason,
                 },
             )
-            send_email(
+            if send_email(
                 to_email,
                 subject=f"Leave Applied — {applicant_name} ({from_date} -> {to_date})",
                 html=html,
                 text=f"FYI: {applicant_name} applied leave for {from_date} -> {to_date}.",
+            ):
+                summary["emails_sent_notification"] += 1
+
+        sent_total = summary["emails_sent_approval"] + summary["emails_sent_notification"]
+        if (
+            planned_sends > 0
+            and sent_total == 0
+            and email_delivery_mode() == "postmark"
+            and not postmark_token_configured()
+        ):
+            summary["delivery_note"] = (
+                "No emails were delivered: Postmark is not set on the API server (the Next.js host is separate). "
+                "Add POSTMARK_SERVER_TOKEN and POSTMARK_FROM_EMAIL where FastAPI runs (e.g. Render), redeploy, "
+                "or set EMAIL_MODE=log to log-only. Check API logs for intended recipients."
             )
-            summary["emails_sent_notification"] += 1
     except Exception as exc:
         summary["error"] = f"send_failed: {exc}"
         logger.error(
