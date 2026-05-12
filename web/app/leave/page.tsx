@@ -13,6 +13,8 @@ type LeaveRequest = {
   reason?: string;
   status?: string;
   not_deducted_days?: number;
+  remarks?: string;
+  decided_by_email?: string;
 };
 
 type LeaveSummary = {
@@ -23,9 +25,13 @@ type LeaveSummary = {
     email?: string | null;
   };
   year: number;
+  month: number;
   total_leave: number;
   total_used_leave: number;
   balance_leave: number;
+  lop_days?: number;
+  leave_exhausted?: boolean;
+  attendance_period_end?: string | null;
   requests: LeaveRequest[];
 };
 
@@ -43,10 +49,35 @@ const emptyForm: LeaveForm = {
   reason: "",
 };
 
+function formatAllocationYearMonth(y: number, m: number) {
+  return new Date(y, m - 1, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
+}
+
+function LeaveDeductionBadges({ row }: { row: LeaveSummary }) {
+  const exhausted = Boolean(row.leave_exhausted);
+  const lop = row.lop_days ?? 0;
+  if (!exhausted && lop <= 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {exhausted ? (
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">
+          Leave exhausted
+        </span>
+      ) : null}
+      {lop > 0 ? (
+        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-900 dark:bg-rose-500/20 dark:text-rose-200">
+          Loss of pay (LOP): {Number.isInteger(lop) ? lop : lop.toFixed(1)}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export default function LeavePage() {
   const now = useMemo(() => new Date(), []);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
   const [rows, setRows] = useState<LeaveSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<LeaveForm>(emptyForm);
@@ -58,13 +89,14 @@ export default function LeavePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const canManage = currentUser?.role === "master_admin" || currentUser?.role === "admin";
+  const canEditLeaveAllocation = currentUser?.role === "master_admin";
   const selected = rows.find((row) => row.employee.id === selectedId) || rows[0] || null;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<LeaveSummary[]>(`/leave/summary?year=${year}`);
+      const data = await apiFetch<LeaveSummary[]>(`/leave/summary?year=${year}&month=${month}`);
       setRows(data || []);
       setSelectedId((current) => current || data?.[0]?.employee.id || null);
     } catch (err) {
@@ -72,7 +104,7 @@ export default function LeavePage() {
     } finally {
       setLoading(false);
     }
-  }, [year]);
+  }, [year, month]);
 
   useEffect(() => {
     setCurrentUser(getStoredUser());
@@ -80,6 +112,12 @@ export default function LeavePage() {
     const onAuthChange = () => setCurrentUser(getStoredUser());
     window.addEventListener("industryprime-auth-change", onAuthChange);
     return () => window.removeEventListener("industryprime-auth-change", onAuthChange);
+  }, [load]);
+
+  useEffect(() => {
+    const onAttendance = () => void load();
+    window.addEventListener("industryprime-attendance-change", onAttendance);
+    return () => window.removeEventListener("industryprime-attendance-change", onAttendance);
   }, [load]);
 
   function selectCard(employeeId: string) {
@@ -121,7 +159,7 @@ export default function LeavePage() {
   }
 
   async function updateTotalLeave(row: LeaveSummary, totalLeave: number) {
-    if (!canManage) return;
+    if (!canEditLeaveAllocation) return;
     setBusyId(row.employee.id);
     setError(null);
     try {
@@ -131,33 +169,22 @@ export default function LeavePage() {
         body: JSON.stringify({ year, total_leave: totalLeave }),
       });
       setRows((items) =>
-        items.map((item) =>
-          item.employee.id === row.employee.id
-            ? { ...item, total_leave: totalLeave, balance_leave: Number((totalLeave - item.total_used_leave).toFixed(2)) }
-            : item
-        )
+        items.map((item) => {
+          if (item.employee.id !== row.employee.id) return item;
+          const used = item.total_used_leave;
+          const balanceLeave = Math.max(0, Math.round((totalLeave - used) * 100) / 100);
+          const lopDays = Math.max(0, Math.round((used - totalLeave) * 100) / 100);
+          return {
+            ...item,
+            total_leave: totalLeave,
+            balance_leave: balanceLeave,
+            lop_days: lopDays,
+            leave_exhausted: balanceLeave === 0 && totalLeave > 0 && used > 0,
+          };
+        })
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update leave allocation");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function decide(request: LeaveRequest, decision: "approved" | "unapproved") {
-    if (!canManage) return;
-    const notDeducted = decision === "unapproved" ? Number(window.prompt("How many leave days should not be deducted?", "0") || 0) : 0;
-    setBusyId(request.id);
-    setError(null);
-    try {
-      await apiFetch(`/leave/requests/${request.id}/${decision}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ not_deducted_days: notDeducted }),
-      });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update leave request");
     } finally {
       setBusyId(null);
     }
@@ -168,21 +195,38 @@ export default function LeavePage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Leave Management</h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Employee leave allocation, usage, balance, and approvals.
-          </p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Pick the allocation year and the month used to count absences.</p>
         </div>
-        <div>
-          <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Year</label>
-          <input
-            type="number"
-            value={year}
-            onChange={(event) => {
-              setYear(Number(event.target.value));
-              setSelectedId(null);
-            }}
-            className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100"
-          />
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Year (allocation)</label>
+            <input
+              type="number"
+              value={year}
+              onChange={(event) => {
+                setYear(Number(event.target.value));
+                setSelectedId(null);
+              }}
+              className="mt-1 w-28 rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Month (absents)</label>
+            <select
+              value={month}
+              onChange={(event) => {
+                setMonth(Number(event.target.value));
+                setSelectedId(null);
+              }}
+              className="mt-1 block w-44 rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>
+                  {formatAllocationYearMonth(year, m)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -258,9 +302,15 @@ export default function LeavePage() {
               <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{row.employee.email || "-"}</div>
               <div className="mt-5 grid grid-cols-3 gap-3 text-sm">
                 <Metric label="Total Leave" value={row.total_leave} />
-                <Metric label="Used" value={row.total_used_leave} />
-                <Metric label="Balance" value={row.balance_leave} strong />
+                <Metric label="Total Used" value={row.total_used_leave} />
+                <Metric
+                  label="Balance Leave"
+                  value={row.balance_leave}
+                  strong
+                  warn={Boolean(row.leave_exhausted) || (row.lop_days ?? 0) > 0}
+                />
               </div>
+              <LeaveDeductionBadges row={row} />
             </button>
           ))}
         </div>
@@ -273,10 +323,11 @@ export default function LeavePage() {
               <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{selected.employee.name || selected.employee.employee_code}</h3>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">{selected.employee.email || "No email"}</p>
             </div>
-            {canManage && (
+            {canEditLeaveAllocation && (
               <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
                 Total Leave (CL + SL)
                 <input
+                  key={selected.employee.id}
                   type="number"
                   min="0"
                   step="0.5"
@@ -291,31 +342,39 @@ export default function LeavePage() {
 
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <Detail label="Total Leave" value={selected.total_leave} />
-            <Detail label="Total Used Leave" value={selected.total_used_leave} />
-            <Detail label="Balance Leave" value={selected.balance_leave} highlight />
+            <Detail label="Total Used" value={selected.total_used_leave} />
+            <Detail
+              label="Balance Leave"
+              value={selected.balance_leave}
+              highlight
+              warn={Boolean(selected.leave_exhausted) || (selected.lop_days ?? 0) > 0}
+            />
           </div>
+          {selected.attendance_period_end ? (
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Attendance counted through {selected.attendance_period_end} for {formatAllocationYearMonth(year, month)}.
+            </p>
+          ) : null}
+          <LeaveDeductionBadges row={selected} />
 
-          <div className="mt-6 space-y-3">
-            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Leave Requests</h4>
-            {selected.requests.length === 0 ? (
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">No leave requests found.</div>
-            ) : (
-              selected.requests.map((request) => (
-                <div key={request.id} className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/40 md:flex-row md:items-center md:justify-between">
-                  <div>
+          {!canManage && (
+            <div className="mt-6 space-y-3">
+              <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">My Leave Status</h4>
+              {selected.requests.length === 0 ? (
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">No leave requests found.</div>
+              ) : (
+                selected.requests.map((request) => (
+                  <div key={request.id} className="flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
                     <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{(request.leave_date_start || "-") + (request.leave_date_end ? ` -> ${request.leave_date_end}` : "")}</div>
-                    <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{request.leave_type || "Leave"} • {request.status || "pending"} {request.reason ? `• ${request.reason}` : ""}</div>
+                    <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{request.leave_type || "Leave"} • {(request.status || "pending").replace("unapproved", "rejected")}</div>
+                    {request.reason && <div className="text-xs text-zinc-600 dark:text-zinc-300">Reason: {request.reason}</div>}
+                    {request.remarks && <div className="text-xs text-zinc-600 dark:text-zinc-300">Decision Remarks: {request.remarks}</div>}
+                    {request.decided_by_email && <div className="text-xs text-zinc-500 dark:text-zinc-400">Decided by: {request.decided_by_email}</div>}
                   </div>
-                  {canManage && (
-                    <div className="flex gap-2">
-                      <button type="button" disabled={busyId === request.id} onClick={() => void decide(request, "approved")} className="rounded-2xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60">Approve</button>
-                      <button type="button" disabled={busyId === request.id} onClick={() => void decide(request, "unapproved")} className="rounded-2xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60">Unapprove</button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -331,10 +390,32 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Metric({ label, value, strong = false }: { label: string; value: React.ReactNode; strong?: boolean }) {
-  return <div><div className="text-xs text-zinc-500 dark:text-zinc-400">{label}</div><div className={`mt-1 text-sm ${strong ? "font-bold text-emerald-700 dark:text-emerald-300" : "font-semibold text-zinc-900 dark:text-zinc-100"}`}>{value}</div></div>;
+function Metric({ label, value, strong = false, warn = false }: { label: string; value: React.ReactNode; strong?: boolean; warn?: boolean }) {
+  const valueClass =
+    strong && warn
+      ? "font-bold text-amber-800 dark:text-amber-200"
+      : strong
+        ? "font-bold text-emerald-700 dark:text-emerald-300"
+        : "font-semibold text-zinc-900 dark:text-zinc-100";
+  return (
+    <div>
+      <div className="text-xs text-zinc-500 dark:text-zinc-400">{label}</div>
+      <div className={`mt-1 text-sm whitespace-nowrap ${valueClass}`}>{value}</div>
+    </div>
+  );
 }
 
-function Detail({ label, value, highlight = false }: { label: string; value: React.ReactNode; highlight?: boolean }) {
-  return <div className={`rounded-2xl border p-4 ${highlight ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100" : "border-zinc-200 bg-white/70 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-100"}`}><div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</div><div className="mt-2 text-lg font-bold">{value}</div></div>;
+function Detail({ label, value, highlight = false, warn = false }: { label: string; value: React.ReactNode; highlight?: boolean; warn?: boolean }) {
+  const box =
+    highlight && warn
+      ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-600/40 dark:bg-amber-500/15 dark:text-amber-100"
+      : highlight
+        ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100"
+        : "border-zinc-200 bg-white/70 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-100";
+  return (
+    <div className={`rounded-2xl border p-4 ${box}`}>
+      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</div>
+      <div className="mt-2 text-lg font-bold">{value}</div>
+    </div>
+  );
 }

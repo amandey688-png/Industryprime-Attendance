@@ -18,7 +18,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [loadingSession, setLoadingSession] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
 
-  const isPublicRoute = useMemo(() => publicRoutes.has(pathname), [pathname]);
+  const isPublicRoute = useMemo(
+    () =>
+      publicRoutes.has(pathname) ||
+      pathname.startsWith("/signup/verify") ||
+      (pathname.startsWith("/leaves/") && pathname.endsWith("/decide")) ||
+      (pathname.startsWith("/leave/requests/") && pathname.endsWith("/decide")),
+    [pathname],
+  );
   const redirectIfAuthedPublic = useMemo(
     () => redirectAuthedPublicRoutes.has(pathname),
     [pathname],

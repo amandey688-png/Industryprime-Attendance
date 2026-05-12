@@ -253,3 +253,54 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
 def require_role(user: Dict[str, Any], *roles: Role) -> None:
     if user.get("role") not in roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+
+def create_pending_signup(name: str, email: str, password_hash: str, supabase: Optional[SupabaseRest] = None) -> None:
+    db = supabase or get_supabase_service()
+    clean_email = normalize_email(email)
+    existing = get_user_by_email(clean_email, db)
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
+    db.upsert_many(
+        table="pending_signups",
+        rows=[
+            {
+                "email": clean_email,
+                "name": name.strip(),
+                "password_hash": password_hash,
+            }
+        ],
+        on_conflict="email",
+    )
+
+
+def get_pending_signup(email: str, supabase: Optional[SupabaseRest] = None) -> Optional[Dict[str, Any]]:
+    db = supabase or get_supabase_service()
+    rows = db.select(
+        table="pending_signups",
+        select="email,name,password_hash,created_at",
+        where_eq={"email": normalize_email(email)},
+        limit=1,
+    )
+    return rows[0] if rows else None
+
+
+def consume_pending_signup(email: str, supabase: Optional[SupabaseRest] = None) -> Optional[Dict[str, Any]]:
+    db = supabase or get_supabase_service()
+    pending = get_pending_signup(email, db)
+    if not pending:
+        return None
+    clean_email = normalize_email(email)
+    rows = db.insert_many(
+        table="users",
+        rows=[
+            {
+                "name": str(pending["name"]).strip(),
+                "email": clean_email,
+                "password_hash": str(pending["password_hash"]),
+                "role": "user",
+            }
+        ],
+        return_representation=True,
+    )
+    return rows[0] if rows else None

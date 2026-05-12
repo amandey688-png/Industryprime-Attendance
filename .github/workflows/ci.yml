@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  backend-tests:
+    name: Backend (pytest + coverage)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        env:
+          JWT_SECRET: ci-github-actions-jwt-secret-32chars-min
+          ALLOW_LOCAL_AUTH_FALLBACK: "1"
+        run: |
+          pytest tests/ -v --tb=short \
+            --cov=. --cov-config=.coveragerc \
+            --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-xml
+          path: backend/coverage.xml
+          if-no-files-found: ignore
+
+  web-lint-build:
+    name: Web (ESLint + Next build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint and production build
+        run: npm run test:ci
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+
+  # Staging smoke: login → payroll. Requires repository secrets (Settings → Secrets → Actions):
+  #   E2E_STAGING_URL    — full origin, e.g. https://your-frontend.vercel.app (no trailing slash)
+  #   E2E_TEST_EMAIL     — non-production test user email
+  #   E2E_TEST_PASSWORD — matching password (min 8 chars per app validation)
+  # If any secret is missing, this job exits successfully without running browsers.
+  playwright-staging-smoke:
+    name: E2E smoke (staging)
+    runs-on: ubuntu-latest
+    needs: web-lint-build
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run smoke (staging secrets)
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_STAGING_URL }}
+          E2E_USER_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+        run: |
+          if [ -z "${E2E_BASE_URL:-}" ] || [ -z "${E2E_USER_EMAIL:-}" ] || [ -z "${E2E_USER_PASSWORD:-}" ]; then
+            echo "::notice title=E2E skipped::Set Actions secrets E2E_STAGING_URL, E2E_TEST_EMAIL, and E2E_TEST_PASSWORD to run the staging Playwright smoke test."
+            exit 0
+          fi
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          if-no-files-found: ignore

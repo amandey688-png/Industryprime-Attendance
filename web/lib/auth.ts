@@ -18,6 +18,11 @@ type AuthResponse = {
   user: AuthUser;
 };
 
+type SignupStartResponse = {
+  otp_sent: boolean;
+  email: string;
+};
+
 const TOKEN_KEY = "industryprime.authToken";
 const USER_KEY = "industryprime.authUser";
 const COOKIE_NAME = "industryprime_token";
@@ -187,6 +192,32 @@ export async function signup(name: string, email: string, password: string): Pro
     throw new Error("Signup response was missing user data.");
   }
   return data.user;
+}
+
+export async function signupStart(name: string, email: string, password: string): Promise<SignupStartResponse> {
+  return authRequest<SignupStartResponse>("/auth/signup/start", {
+    method: "POST",
+    body: JSON.stringify({ name, email, password }),
+  });
+}
+
+export async function signupVerify(email: string, code: string): Promise<AuthUser> {
+  const data = await authRequest<AuthResponse>("/auth/signup/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
+  if (!data?.access_token || !data?.user) {
+    throw new Error("Signup verification response missing token or user profile.");
+  }
+  storeAuth(data.access_token, data.user);
+  return data.user;
+}
+
+export async function signupResend(email: string): Promise<SignupStartResponse> {
+  return authRequest<SignupStartResponse>("/auth/signup/resend", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
 }
 
 export async function forgotPassword(email: string): Promise<string> {

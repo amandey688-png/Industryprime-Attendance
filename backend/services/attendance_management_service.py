@@ -460,9 +460,13 @@ def update_attendance(payload: Dict[str, Any], supabase: SupabaseRest) -> Dict[s
         weekend_auto_present=weekend_auto,
         holiday_name=holiday_name,
     )
-    if calculated.get("in_time") and (
-        calculated.get("out_time") or calculated.get("use_calculated_calendar")
-    ):
+    # Persist every materialized day to public.attendance so leave / reports can query it.
+    # Absent rows have no IN/OUT — they were previously skipped, so "Total Used" never updated.
+    persist_to_attendance_table = str(calculated.get("status") or "").strip().upper() == "A" or (
+        calculated.get("in_time")
+        and (calculated.get("out_time") or calculated.get("use_calculated_calendar"))
+    )
+    if persist_to_attendance_table:
         supabase.upsert_many(
             table="attendance",
             rows=[_stored_attendance_row(row, calculated)],

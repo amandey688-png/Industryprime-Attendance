@@ -1,18 +1,27 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { isAbsoluteHttpUrl } from "@/lib/envApi";
+
 export const runtime = "nodejs";
+
+function trimTrailingPathSeparators(s: string): string {
+  return s.replace(/[/\\]+$/, "");
+}
 
 /**
  * Server-side proxy: browser calls same-origin `/api/*`, this forwards to FastAPI.
  * Reads backend URL at **request time** so Vercel can use `BACKEND_PROXY_TARGET` or
  * `NEXT_PUBLIC_API_URL` without relying on `next.config` rewrites (which bake in build-time env).
+ * Only http(s) URLs are accepted — never a Windows file path (avoids broken `fetch` targets).
  */
 function backendBase(): string {
   const explicit = process.env.BACKEND_PROXY_TARGET?.trim();
-  if (explicit) return explicit.replace(/\/$/, "");
+  if (explicit && isAbsoluteHttpUrl(explicit)) {
+    return trimTrailingPathSeparators(explicit);
+  }
   const pub = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (pub && /^https?:\/\//i.test(pub)) return pub.replace(/\/$/, "");
+  if (pub && isAbsoluteHttpUrl(pub)) return trimTrailingPathSeparators(pub);
   return "http://127.0.0.1:8000";
 }
 

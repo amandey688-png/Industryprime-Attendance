@@ -1,16 +1,27 @@
+/** True if the value is an absolute http(s) URL (not a Windows path like `C:\...`). */
+export function isAbsoluteHttpUrl(s: string): boolean {
+  return /^https?:\/\//i.test(s.trim());
+}
+
+function publicApiUrlFromEnv(): string {
+  const raw =
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL?.trim()) || "";
+  return isAbsoluteHttpUrl(raw) ? raw : "";
+}
+
 /**
- * Backend origin from env (build-time). When unset, same-origin `/api` (Next rewrites).
+ * Backend origin from env (build-time). When unset or invalid, same-origin `/api`.
  */
-export const API_BASE =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL?.trim()) || "/api";
+export const API_BASE = publicApiUrlFromEnv() || "/api";
 
 /**
  * Resolve the base URL at **request time** in the browser.
  * If `NEXT_PUBLIC_API_URL` is another origin (e.g. `http://127.0.0.1:8000` while the app
  * runs on `http://localhost:3000`), use `/api` so Next.js proxies and CORS is avoided.
+ * Invalid values (file paths, typos) fall back to `/api` so fetch never uses a bogus host.
  */
 export function effectiveApiBase(): string {
-  const env = process.env.NEXT_PUBLIC_API_URL?.trim() || "";
+  const env = publicApiUrlFromEnv();
   if (typeof window === "undefined") {
     return env || "http://127.0.0.1:8000";
   }
@@ -20,7 +31,7 @@ export function effectiveApiBase(): string {
       return "/api";
     }
   } catch {
-    return env;
+    return "/api";
   }
   return env;
 }

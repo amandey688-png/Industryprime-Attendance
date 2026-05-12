@@ -1,0 +1,9 @@
+-- Payroll monthly absent/present/weekoff/holiday logic is implemented in FastAPI:
+-- backend/services/payroll_attendance_summary_service.py (used by GET /payroll/summary).
+-- For RPC-based COUNT(*) FILTER aggregates later, mirror the same rules:
+-- - Cap each employee at MIN(month_end, CURRENT_DATE, MAX(public.attendance.date in month)).
+--   Snapshot max date alone must not extend the window (avoid extra snapshot-only absent days).
+-- - Join public.holidays on calendar date for holiday buckets.
+-- - Per date: merge monthly_attendance snapshot with public.attendance (DB row wins).
+-- - Classification: calendar holidays; Sundays = week-off (not absent); OT/SF final_status
+--   (whole-word "absent"); status A fallback; Saturday week-end only when row missing.
