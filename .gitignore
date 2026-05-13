@@ -10,6 +10,12 @@ web/.env.local
 web/node_modules/
 web/.next/
 web/out/
+# next-pwa / Workbox (generated at production build)
+web/public/sw.js
+web/public/workbox-*.js
+web/public/worker-*.js
+web/public/fallback-*.js
+web/public/precache.*.js
 web/*.tsbuildinfo
 web/.git.disabled/
 .env
