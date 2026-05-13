@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { InstallAppPrompt } from "@/components/pwa/InstallAppPrompt";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import { cn } from "@/lib/cn";
@@ -75,7 +76,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }, [isPublicRoute, loadingSession, pathname, redirectIfAuthedPublic, router, user]);
 
   if (isPublicRoute) {
-    return <>{children}</>;
+    return (
+      <>
+        <InstallAppPrompt />
+        {children}
+      </>
+    );
   }
 
   if (loadingSession || !user) {
@@ -102,6 +108,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+      <InstallAppPrompt />
     </div>
   );
 }

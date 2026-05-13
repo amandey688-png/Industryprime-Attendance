@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import AppShell from "@/components/layout/AppShell";
@@ -14,12 +14,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#059669",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: "IndustryPrime-Attendance",
-  description: "IndustryPrime-Attendance — Premium enterprise HRIS",
+  applicationName: "IndustryPrime Attendance",
+  title: {
+    default: "IndustryPrime Attendance",
+    template: "%s | IP Attendance",
+  },
+  description: "Attendance & Leave Management System",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "IP Attendance",
+    statusBarStyle: "black-translucent",
+  },
   icons: {
-    icon: "/industryprime-logo.png",
-    apple: "/industryprime-logo.png",
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
   },
 };
 

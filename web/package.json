@@ -6,7 +6,9 @@
     "clean:next": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true,maxRetries:10,retryDelay:250});console.log('Removed .next');}catch(e){console.warn('clean:next:',e?.code||e?.message)}\"",
     "dev": "node --max-old-space-size=8192 ./node_modules/next/dist/bin/next dev --webpack --port 3000",
     "dev:fresh": "npm run clean:next && npm run dev",
-    "build": "next build",
+    "pwa:icons": "node scripts/generate-pwa-icons.mjs",
+    "prebuild": "npm run pwa:icons",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test:ci": "npm run lint && npm run build",
@@ -16,6 +18,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
     "next": "16.2.2",
+    "next-pwa": "^5.6.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -27,6 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
