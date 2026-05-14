@@ -56,6 +56,7 @@ from routers.payroll import router as payroll_router
 from routers.auth import router as auth_router
 from routers.email_lists import router as email_lists_router
 from routers.leaves import router as leaves_router
+from routers.me import router as me_router
 from routers.auth import LoginRequest, login as auth_login
 from routers.months import router as months_router
 
@@ -100,6 +101,7 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(months_router, prefix="/months", tags=["months"])
 app.include_router(email_lists_router, prefix="/email-lists", tags=["email-lists"])
 app.include_router(leaves_router, prefix="/leaves", tags=["leaves"])
+app.include_router(me_router, prefix="/me", tags=["me"])
 
 
 @app.get("/")

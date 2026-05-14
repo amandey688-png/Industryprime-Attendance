@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { forgotPassword, login } from "@/lib/auth";
+import { forgotPassword, getStoredUser, login } from "@/lib/auth";
 import { errorMessageForUser } from "@/lib/userFacingError";
 
 export default function LoginPage() {
@@ -34,7 +34,7 @@ export default function LoginPage() {
     setInfo(null);
     try {
       await login(emailTrim, password);
-      router.replace("/dashboard");
+      router.replace(getStoredUser()?.role === "user" ? "/dashboard/user" : "/dashboard");
       router.refresh();
     } catch (err) {
       setError(errorMessageForUser(err, "Sign-in did not complete. Please try again."));

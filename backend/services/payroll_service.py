@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from database.supabase_client import SupabaseRest, get_supabase
 from services.leave_balance_attendance_service import compute_absent_leave_used_by_employee
 from services.payroll_attendance_summary_service import compute_payroll_attendance_metrics
+from services.payroll_constants import PAYROLL_SALARY_DAYS_PER_MONTH
 from services.payslip_service import compute_payslip
 from services.working_hours import minutes_to_hhmm_float
 
@@ -62,7 +63,9 @@ def summarize_payroll(
     role: str,
     supabase: SupabaseRest,
 ) -> Dict[str, Any]:
-    cal_days = calendar.monthrange(year, month)[1]
+    # Salary per-day and payslip proration always use 30 days (not actual month length).
+    salary_basis_days = PAYROLL_SALARY_DAYS_PER_MONTH
+    actual_calendar_days_in_month = calendar.monthrange(year, month)[1]
 
     employees = supabase.select(
         table="employees",
@@ -111,7 +114,7 @@ def summarize_payroll(
         total_hours = minutes_to_hhmm_float(total_minutes)
 
         monthly_salary = float(employee.get("salary_monthly") or 0)
-        divisor = float(cal_days)
+        divisor = float(salary_basis_days)
         salary_per_day = round(monthly_salary / divisor, 2) if divisor else 0
         payable = round(salary_per_day * salary_eligible_days, 2)
         deductions = max(0.0, round(monthly_salary - payable, 2))
@@ -124,7 +127,7 @@ def summarize_payroll(
             employee,
             month=month,
             year=year,
-            calendar_days=cal_days,
+            calendar_days=salary_basis_days,
             present_days=present,
             absent_attendance_days=absent_attendance,
             weekoff_days=weekoff_days,
@@ -152,7 +155,9 @@ def summarize_payroll(
                 },
                 "month": month,
                 "year": year,
-                "total_days": cal_days,
+                "total_days": salary_basis_days,
+                "calendar_days_in_month_actual": actual_calendar_days_in_month,
+                "salary_basis_days": salary_basis_days,
                 "total_days_present": present,
                 "total_days_absent": absent,
                 "attendance_absent_days": absent_attendance,

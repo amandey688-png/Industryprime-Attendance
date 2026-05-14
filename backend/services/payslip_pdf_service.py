@@ -157,7 +157,7 @@ def build_payslip_pdf_bytes(
         ("HRA", earn["hra"], disp["hra_blank"], "Professional tax", ded["professional_tax"], disp["professional_tax_blank"]),
         ("Conveyance allowance", earn["conveyance"], disp["conveyance_blank"], "Income tax (TDS)", ded["income_tax_tds"], disp["tds_blank"]),
         (
-            "Special allowance",
+            "Mobile allowance",
             earn["special_allowance"],
             disp["special_allowance_blank"],
             "Late deduction",

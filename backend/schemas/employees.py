@@ -17,7 +17,11 @@ class EmployeeCreate(BaseModel):
     income_tax_tds_monthly: Optional[float] = Field(default=None, ge=0)
     hra_monthly: Optional[float] = Field(default=None, ge=0)
     conveyance_monthly: Optional[float] = Field(default=None, ge=0)
-    special_allowance_monthly: Optional[float] = Field(default=None, ge=0)
+    special_allowance_monthly: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Mobile allowance per month (₹); paid in full on payslip when set (not prorated by attendance). Enter monthly salary excluding this amount when set.",
+    )
 
 
 class EmployeeUpdate(BaseModel):
@@ -32,13 +36,21 @@ class EmployeeUpdate(BaseModel):
     income_tax_tds_monthly: Optional[float] = Field(default=None, ge=0)
     hra_monthly: Optional[float] = Field(default=None, ge=0)
     conveyance_monthly: Optional[float] = Field(default=None, ge=0)
-    special_allowance_monthly: Optional[float] = Field(default=None, ge=0)
+    special_allowance_monthly: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Mobile allowance per month (₹); paid in full on payslip when set (not prorated by attendance). Enter monthly salary excluding this amount when set.",
+    )
 
 
 class EmployeeAllowancesSelfUpdate(BaseModel):
     hra_monthly: Optional[float] = Field(default=None, ge=0)
     conveyance_monthly: Optional[float] = Field(default=None, ge=0)
-    special_allowance_monthly: Optional[float] = Field(default=None, ge=0)
+    special_allowance_monthly: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Mobile allowance per month (₹); paid in full on payslip when set (not prorated by attendance). Enter monthly salary excluding this amount when set.",
+    )
 
 
 class EmployeeOut(BaseModel):
@@ -55,6 +67,9 @@ class EmployeeOut(BaseModel):
     income_tax_tds_monthly: Optional[float] = None
     hra_monthly: Optional[float] = None
     conveyance_monthly: Optional[float] = None
-    special_allowance_monthly: Optional[float] = None
+    special_allowance_monthly: Optional[float] = Field(
+        default=None,
+        description="Mobile allowance per month (₹); paid in full on payslip when set.",
+    )
 
     model_config = {"extra": "ignore"}

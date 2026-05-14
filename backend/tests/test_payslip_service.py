@@ -33,6 +33,34 @@ def test_professional_tax_full_month_not_prorated() -> None:
     assert ps["net_pay"] == 9_800.0
 
 
+def test_mobile_allowance_full_month_not_prorated_by_attendance() -> None:
+    """Mobile is the full employee monthly amount, not scaled by salary-eligible days."""
+    employee = {
+        "hra_monthly": None,
+        "conveyance_monthly": None,
+        "special_allowance_monthly": 1_000.0,
+        "pf_employee_monthly": None,
+        "income_tax_tds_monthly": None,
+        "professional_tax": 200.0,
+    }
+    ps = compute_payslip(
+        employee,
+        month=5,
+        year=2026,
+        calendar_days=30,
+        present_days=10,
+        absent_attendance_days=5,
+        weekoff_days=10,
+        holiday_days=5,
+        salary_eligible_days=10,
+        monthly_salary=30_000.0,
+    )
+    assert ps["earnings"]["special_allowance"] == 1_000.0
+    assert ps["earnings"]["salary"] == 10_000.0
+    assert ps["earnings"]["gross_earned"] == 11_000.0
+    assert ps["net_pay"] == 10_800.0
+
+
 def test_payslip_blank_statutory_lines() -> None:
     employee = {
         "hra_monthly": None,

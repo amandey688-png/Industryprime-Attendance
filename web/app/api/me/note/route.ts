@@ -1,0 +1,18 @@
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+
+import { forwardToBackend } from "@/lib/server/forwardToBackend";
+import { requireUserSession } from "@/lib/server/userSession";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(req: NextRequest) {
+  const gate = await requireUserSession(req);
+  if (gate instanceof NextResponse) return gate;
+  const raw = await req.text();
+  return forwardToBackend(req, "/me/note", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: raw || "{}",
+  });
+}

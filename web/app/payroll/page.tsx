@@ -72,7 +72,12 @@ type PayrollItem = {
   employee: Employee;
   month: number;
   year: number;
+  /** Denominator for salary per-day (always 30). */
   total_days: number;
+  /** Actual length of the selected calendar month (28–31). */
+  calendar_days_in_month_actual?: number;
+  /** Same as total_days; explicit for clarity. */
+  salary_basis_days?: number;
   total_days_present: number;
   total_days_absent: number;
   attendance_absent_days: number;
@@ -263,7 +268,7 @@ function PayslipDocument({
                 <td className="py-2 text-right font-medium text-zinc-900">{money(ps.earnings.conveyance, d.conveyance_blank)}</td>
               </tr>
               <tr className="border-b border-zinc-100">
-                <td className="py-2 text-zinc-600">Special allowance</td>
+                <td className="py-2 text-zinc-600">Mobile allowance</td>
                 <td className="py-2 text-right font-medium text-zinc-900">{money(ps.earnings.special_allowance, d.special_allowance_blank)}</td>
               </tr>
               <tr>
@@ -403,10 +408,23 @@ export default function PayrollPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 max-w-2xl shrink">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Payroll</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Payslip for the month selected above. Use Previous / Next or the month picker to change the period.</p>
+          <div
+            className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm leading-relaxed text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200"
+            role="note"
+            aria-label="How payroll period and salary basis work"
+          >
+            <p className="m-0">
+              Payslip for the month selected above. Use Previous / Next or the month picker to change the period. Salary
+              per-day and proration use a <strong className="font-semibold text-zinc-950 dark:text-zinc-50">30-day</strong>{" "}
+              month for every calendar month (attendance still follows real dates).{" "}
+              <span className="text-zinc-700 dark:text-zinc-300">
+                Mobile allowance is the full monthly amount from the employee profile when set, not reduced by attendance.
+              </span>
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
