@@ -54,6 +54,12 @@ export default function Sidebar({ isOpen, onClose, onDismiss }: SidebarProps) {
     () => [
       { label: "Dashboard", href: "/dashboard", icon: IconGrid },
       {
+        label: "Admin overview",
+        href: "/dashboard/admin",
+        icon: IconSparkles,
+        roles: ["master_admin", "admin"],
+      },
+      {
         label: "Users",
         href: "/users",
         icon: IconUsers,
@@ -90,11 +96,22 @@ export default function Sidebar({ isOpen, onClose, onDismiss }: SidebarProps) {
           item.href === "/payroll",
       );
     }
+    /* admin: all sections except Leave oversight (master_admin only in items). master_admin: full base. */
+    if (role === "admin") {
+      return base.filter((item) => item.href !== "/leave/admin");
+    }
     return base;
   }, [items, role]);
 
+  const navItems = useMemo(() => {
+    return visibleItems.map((it) =>
+      it.href === "/dashboard" && role === "user" ? { ...it, href: "/dashboard/user", label: "My dashboard" } : it,
+    );
+  }, [visibleItems, role]);
+
   function linkIsNoOp(href: string): boolean {
     if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/dashboard/user") return pathname === "/dashboard/user" || pathname.startsWith("/dashboard/user/");
     if (href === "/attendance") {
       return (
         pathname === "/attendance" ||
@@ -184,16 +201,18 @@ export default function Sidebar({ isOpen, onClose, onDismiss }: SidebarProps) {
       </div>
 
       <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 py-2 pb-2" aria-label="Main pages">
-        {visibleItems.map((item) => {
+        {navItems.map((item) => {
           const isAttendanceSheet =
             pathname === "/attendance" ||
             (pathname.startsWith("/attendance/") && !pathname.startsWith("/attendance/upload"));
           const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : item.href === "/attendance"
-                ? isAttendanceSheet
-                : pathname.startsWith(item.href);
+            item.href === "/dashboard/user"
+              ? pathname.startsWith("/dashboard/user")
+              : item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : item.href === "/attendance"
+                  ? isAttendanceSheet
+                  : pathname.startsWith(item.href);
           const Icon = item.icon;
 
           return (

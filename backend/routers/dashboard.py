@@ -4,14 +4,22 @@ import hashlib
 import os
 import secrets
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Query
 from fastapi import Header, HTTPException
 from pydantic import BaseModel, Field
 
-from services.dashboard_service import get_dashboard_summary
+from services.auth_service import require_role
+from services.dashboard_service import (
+    get_attendance_trend,
+    get_audit_events_dashboard,
+    get_dashboard_summary,
+    get_department_present_today,
+    get_late_arrivals_today,
+    get_pending_leaves_dashboard,
+)
 from dependencies.auth_dependency import get_auth_context
 from database.supabase_client import get_supabase_user, get_supabase
 from services.public_frontend_url import public_base_url_for_email
@@ -33,11 +41,81 @@ def dashboard_summary(
         raise HTTPException(status_code=401, detail="Missing Authorization bearer token")
 
     auth = get_auth_context(authorization=authorization)
+    require_role({"role": auth.role}, "master_admin", "admin")
     return get_dashboard_summary(
         for_date=for_date,
         tenant_id=auth.tenant_id,
         supabase=get_supabase_user(auth.access_token),
     )
+
+
+@router.get("/trend", response_model=List[Dict[str, Any]])
+def dashboard_trend(
+    days: int = Query(default=14, ge=1, le=90),
+    authorization: Optional[str] = Header(default=None),
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization bearer token")
+    auth = get_auth_context(authorization=authorization)
+    require_role({"role": auth.role}, "master_admin", "admin")
+    return get_attendance_trend(days=days, supabase=get_supabase_user(auth.access_token))
+
+
+@router.get("/departments/present", response_model=List[Dict[str, Any]])
+def dashboard_departments_present(
+    for_date: Optional[date] = Query(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization bearer token")
+    auth = get_auth_context(authorization=authorization)
+    require_role({"role": auth.role}, "master_admin", "admin")
+    return get_department_present_today(for_date=for_date, supabase=get_supabase_user(auth.access_token))
+
+
+@router.get("/late-today", response_model=List[Dict[str, Any]])
+def dashboard_late_today(
+    for_date: Optional[date] = Query(default=None),
+    department: Optional[str] = Query(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization bearer token")
+    auth = get_auth_context(authorization=authorization)
+    require_role({"role": auth.role}, "master_admin", "admin")
+    return get_late_arrivals_today(
+        for_date=for_date,
+        department=department,
+        supabase=get_supabase_user(auth.access_token),
+    )
+
+
+@router.get("/pending-leaves", response_model=List[Dict[str, Any]])
+def dashboard_pending_leaves(
+    limit: int = Query(default=80, ge=1, le=200),
+    authorization: Optional[str] = Header(default=None),
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization bearer token")
+    auth = get_auth_context(authorization=authorization)
+    require_role({"role": auth.role}, "master_admin", "admin")
+    return get_pending_leaves_dashboard(
+        tenant_id=auth.tenant_id,
+        supabase=get_supabase_user(auth.access_token),
+        limit=limit,
+    )
+
+
+@router.get("/audit", response_model=List[Dict[str, Any]])
+def dashboard_audit(
+    limit: int = Query(default=40, ge=1, le=100),
+    authorization: Optional[str] = Header(default=None),
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization bearer token")
+    auth = get_auth_context(authorization=authorization)
+    require_role({"role": auth.role}, "master_admin", "admin")
+    return get_audit_events_dashboard(supabase=get_supabase_user(auth.access_token), limit=limit)
 
 
 @router.get("/attendance-entry-url", response_model=Dict[str, str])

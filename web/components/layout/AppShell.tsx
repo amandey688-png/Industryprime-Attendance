@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { InstallAppPrompt } from "@/components/pwa/InstallAppPrompt";
+import { DashboardAdminNavProvider } from "@/components/dashboard/DashboardAdminNavContext";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import { cn } from "@/lib/cn";
@@ -99,7 +100,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       return;
     }
     if (user && redirectIfAuthedPublic) {
-      router.replace("/dashboard");
+      router.replace(user.role === "user" ? "/dashboard/user" : "/dashboard");
     }
   }, [isPublicRoute, loadingSession, pathname, redirectIfAuthedPublic, router, user]);
 
@@ -114,6 +115,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const openMainSidebar = useCallback(() => setIsSidebarOpen(true), []);
+  const closeMainSidebar = useCallback(() => setIsSidebarOpen(false), []);
 
   /** User dismissed drawer (backdrop, X) — persist closed on desktop. */
   const dismissSidebar = useCallback(() => {
@@ -175,28 +179,34 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
-      {isSidebarOpen ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-30 bg-zinc-950/55 backdrop-blur-[2px] motion-reduce:backdrop-blur-none"
-          aria-label="Close navigation overlay"
-          onClick={dismissSidebar}
-        />
-      ) : null}
+    <DashboardAdminNavProvider
+      pathname={pathname}
+      onOpenMainSidebar={openMainSidebar}
+      onCloseMainSidebar={closeMainSidebar}
+    >
+      <div className="flex min-h-screen w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
+        {isSidebarOpen ? (
+          <button
+            type="button"
+            className="fixed inset-0 z-30 bg-zinc-950/55 backdrop-blur-[2px] motion-reduce:backdrop-blur-none"
+            aria-label="Close navigation overlay"
+            onClick={dismissSidebar}
+          />
+        ) : null}
 
-      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebarFromNav} onDismiss={dismissSidebar} />
+        <Sidebar isOpen={isSidebarOpen} onClose={closeSidebarFromNav} onDismiss={dismissSidebar} />
 
-      <Header isSidebarOpen={isSidebarOpen} onToggleSidebar={toggleSidebarFromUser} />
+        <Header isSidebarOpen={isSidebarOpen} onToggleSidebar={toggleSidebarFromUser} />
 
-      <main
-        className={cn("relative z-10 mx-auto w-full flex-1 px-3 py-6 sm:px-6 sm:py-8 lg:px-8")}
-        aria-label="Page content"
-      >
-        {children}
-      </main>
+        <main
+          className={cn("relative z-10 mx-auto w-full flex-1 px-3 py-6 sm:px-6 sm:py-8 lg:px-8")}
+          aria-label="Page content"
+        >
+          {children}
+        </main>
 
-      <InstallAppPrompt />
-    </div>
+        <InstallAppPrompt />
+      </div>
+    </DashboardAdminNavProvider>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import AppShell from "@/components/layout/AppShell";
+import { AppProviders } from "@/components/providers/AppProviders";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -77,7 +78,9 @@ export default function RootLayout({
         />
       </head>
       <body className="flex min-h-full flex-col">
-        <AppShell>{children}</AppShell>
+        <AppProviders>
+          <AppShell>{children}</AppShell>
+        </AppProviders>
       </body>
     </html>
   );

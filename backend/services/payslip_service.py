@@ -26,8 +26,16 @@ def compute_payslip(
     monthly_salary: float,
 ) -> Dict[str, Any]:
     """
-    Build payslip numbers for one calendar month. Gross earned is monthly package
-    (salary + HRA + conveyance + special) prorated by salary_eligible_days / calendar_days.
+    Build payslip numbers for one calendar month.
+
+    Monthly salary (`monthly_salary`) is split with HRA and conveyance only: base =
+    monthly − HRA − conveyance. **Mobile allowance** (`special_allowance_monthly`) is not
+    subtracted from that base; when set, the **full monthly** amount is added to gross and
+    net (not prorated by attendance; same idea as full-month professional tax on the
+    deduction side). Enter monthly salary **excluding** mobile when the mobile field is used.
+
+    `calendar_days` is the denominator for the attendance factor (IndustryPrime policy: 30
+    for every month via payroll_service; callers may pass other values only in tests).
     Statutory lines: professional tax is the full monthly amount from the employee profile
     (not prorated). PF and TDS use the same attendance proration factor as gross when set.
     """
@@ -43,7 +51,8 @@ def compute_payslip(
     conv = conv_m if conv_m is not None else 0.0
     spec = spec_m if spec_m is not None else 0.0
 
-    base_monthly = max(0.0, round(monthly_full - hra - conv - spec, 2))
+    # Mobile allowance is additive on top of monthly salary (not carved out of base).
+    base_monthly = max(0.0, round(monthly_full - hra - conv, 2))
 
     def prorate(amt: float) -> float:
         return round(float(amt) * factor, 2)
@@ -51,8 +60,10 @@ def compute_payslip(
     salary_earned = prorate(base_monthly)
     hra_e = prorate(hra)
     conv_e = prorate(conv)
-    spec_e = prorate(spec)
-    gross_earned = round(salary_earned + hra_e + conv_e + spec_e, 2)
+    # Mobile allowance: full profile amount for the month (employee-wise), not attendance-prorated.
+    mobile_full = round(float(spec), 2) if spec_m is not None else 0.0
+    spec_e = mobile_full if spec_m is not None else None
+    gross_earned = round(salary_earned + hra_e + conv_e + mobile_full, 2)
 
     pf_raw = _f(employee.get("pf_employee_monthly"))
     pt_raw = _f(employee.get("professional_tax"))
@@ -85,7 +96,7 @@ def compute_payslip(
             "salary": salary_earned,
             "hra": hra_e if hra_m is not None else None,
             "conveyance": conv_e if conv_m is not None else None,
-            "special_allowance": spec_e if spec_m is not None else None,
+            "special_allowance": spec_e,
             "gross_earned": gross_earned,
         },
         "deductions": {

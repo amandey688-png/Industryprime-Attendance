@@ -241,7 +241,11 @@ export default function EmployeesPage() {
               <Field label="PF deduction (monthly ₹)"><FormInput type="number" value={form.pf_employee_monthly} placeholder="Leave blank" onChange={(value) => setForm((s) => ({ ...s, pf_employee_monthly: value }))} /></Field>
               <Field label="Income tax / TDS (monthly)"><FormInput type="number" value={form.income_tax_tds_monthly} placeholder="Leave blank" onChange={(value) => setForm((s) => ({ ...s, income_tax_tds_monthly: value }))} /></Field>
             </div>
-            <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">HRA, conveyance, and special allowance can be added after save using Edit on this table.</div>
+            <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+              HRA, conveyance, and mobile allowance can be added after save using Edit on this table. If mobile allowance
+              is set, monthly salary should exclude that amount. Mobile is paid in full each month on the payslip (not
+              prorated by attendance).
+            </div>
           </div>
           <div className="mt-4 flex justify-end gap-3">
             <button type="button" onClick={() => { setForm(emptyForm); setShowAddForm(false); }} className="rounded-2xl border border-zinc-200 bg-white/70 px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-white dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-200">Cancel</button>
@@ -281,7 +285,14 @@ export default function EmployeesPage() {
                             <Field label="TDS (monthly)"><FormInput type="number" value={editForm.income_tax_tds_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, income_tax_tds_monthly: v }))} /></Field>
                             <Field label="HRA (monthly)"><FormInput type="number" value={editForm.hra_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, hra_monthly: v }))} /></Field>
                             <Field label="Conveyance"><FormInput type="number" value={editForm.conveyance_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, conveyance_monthly: v }))} /></Field>
-                            <Field label="Special allowance"><FormInput type="number" value={editForm.special_allowance_monthly} placeholder="Blank" onChange={(v) => setEditForm((s) => ({ ...s, special_allowance_monthly: v }))} /></Field>
+                            <Field label="Mobile allowance">
+                              <FormInput
+                                type="number"
+                                value={editForm.special_allowance_monthly}
+                                placeholder="Blank"
+                                onChange={(v) => setEditForm((s) => ({ ...s, special_allowance_monthly: v }))}
+                              />
+                            </Field>
                           </div>
                           <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">These allowance fields are maintained here (admin).</p>
                         </td>
