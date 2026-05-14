@@ -74,9 +74,15 @@ async function proxy(req: NextRequest, segments: string[]) {
     upstream = await fetch(target, init);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Upstream fetch failed";
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[api proxy] upstream fetch failed", { target, cause: msg });
+    } else {
+      console.error("[api proxy] upstream fetch failed");
+    }
     return NextResponse.json(
       {
-        detail: `Cannot reach API at ${backendBase()}. Set BACKEND_PROXY_TARGET or NEXT_PUBLIC_API_URL on the host. (${msg})`,
+        detail:
+          "The service is temporarily unavailable. Please try again in a few moments.",
       },
       { status: 502 },
     );

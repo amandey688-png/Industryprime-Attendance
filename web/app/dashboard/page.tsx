@@ -100,7 +100,7 @@ export default function DashboardPage() {
               Welcome {user?.name || "team member"}. Your role controls which modules and actions are available.
               Use <span className="font-semibold text-emerald-800 dark:text-emerald-200">Add Attendance</span> in the
               top bar for <span className="font-medium">Enter Atten.</span> (manual) or{" "}
-              <span className="font-medium">Upload → PDF (daily report)</span>; numbers below refresh from the database
+              <span className="font-medium">Upload → PDF (daily report)</span>; numbers below refresh automatically
               every few seconds while you stay on this page.
             </p>
           </div>
