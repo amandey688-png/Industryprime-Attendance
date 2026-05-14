@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { InstallAppPrompt } from "@/components/pwa/InstallAppPrompt";
 import Header from "./Header";
@@ -12,12 +12,41 @@ import { clearAuth, getCurrentUser, getStoredToken, type AuthUser } from "@/lib/
 const publicRoutes = new Set(["/login", "/signup", "/attendance-entry", "/attendance-upload"]);
 const redirectAuthedPublicRoutes = new Set(["/login", "/signup"]);
 
+const LS_SIDEBAR_OPEN = "industryprime.sidebarOpen";
+
+function isDesktopMq(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(min-width: 768px)").matches;
+}
+
+function readPersistedSidebarOpen(): boolean {
+  try {
+    if (typeof window !== "undefined" && isDesktopMq()) {
+      return window.localStorage.getItem(LS_SIDEBAR_OPEN) === "true";
+    }
+  } catch {
+    /* private mode / quota */
+  }
+  return false;
+}
+
+function writePersistedSidebarOpen(open: boolean) {
+  try {
+    if (typeof window !== "undefined" && isDesktopMq()) {
+      window.localStorage.setItem(LS_SIDEBAR_OPEN, open ? "true" : "false");
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loadingSession, setLoadingSession] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const prevPathRef = useRef<string | null>(null);
 
   const isPublicRoute = useMemo(
     () =>
@@ -60,7 +89,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
       mounted = false;
       window.removeEventListener("industryprime-auth-change", verifySession);
     };
-    // Refresh and login/logout handled here. Do not re-run on pathname — parallel /auth/me calls caused flaky “stuck” loading.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: stable session probe
   }, []);
 
@@ -74,6 +102,60 @@ export default function AppShell({ children }: { children: ReactNode }) {
       router.replace("/dashboard");
     }
   }, [isPublicRoute, loadingSession, pathname, redirectIfAuthedPublic, router, user]);
+
+  /** Close after route change; does not change localStorage preference. */
+  const closeSidebarFromNav = useCallback(() => setIsSidebarOpen(false), []);
+
+  /** User toggled menu (hamburger) — persist preference on desktop. */
+  const toggleSidebarFromUser = useCallback(() => {
+    setIsSidebarOpen((v) => {
+      const next = !v;
+      writePersistedSidebarOpen(next);
+      return next;
+    });
+  }, []);
+
+  /** User dismissed drawer (backdrop, X) — persist closed on desktop. */
+  const dismissSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+    writePersistedSidebarOpen(false);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!readPersistedSidebarOpen()) return;
+    setIsSidebarOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (prevPathRef.current === null) {
+      prevPathRef.current = pathname;
+      return;
+    }
+    if (prevPathRef.current !== pathname) {
+      prevPathRef.current = pathname;
+      setIsSidebarOpen(false);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.style.overflow = isSidebarOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dismissSidebar();
+      }
+    }
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [isSidebarOpen, dismissSidebar]);
 
   if (isPublicRoute) {
     return (
@@ -93,23 +175,28 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-[var(--background)] text-[var(--foreground)]">
-      <Sidebar
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((v) => !v)}
-      />
+    <div className="flex min-h-screen w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
+      {isSidebarOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-zinc-950/55 backdrop-blur-[2px] motion-reduce:backdrop-blur-none"
+          aria-label="Close navigation overlay"
+          onClick={dismissSidebar}
+        />
+      ) : null}
 
-      <div className={cn("flex min-w-0 flex-1 flex-col")}>
-        <Header onToggleSidebar={() => setCollapsed((v) => !v)} />
-        <main
-          className="mx-auto w-full flex-1 px-4 py-8 sm:px-6 lg:px-8"
-          aria-label="Page content"
-        >
-          {children}
-        </main>
-      </div>
+      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebarFromNav} onDismiss={dismissSidebar} />
+
+      <Header isSidebarOpen={isSidebarOpen} onToggleSidebar={toggleSidebarFromUser} />
+
+      <main
+        className={cn("relative z-10 mx-auto w-full flex-1 px-3 py-6 sm:px-6 sm:py-8 lg:px-8")}
+        aria-label="Page content"
+      >
+        {children}
+      </main>
+
       <InstallAppPrompt />
     </div>
   );
 }
-

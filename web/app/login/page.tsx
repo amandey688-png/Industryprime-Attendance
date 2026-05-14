@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { forgotPassword, login } from "@/lib/auth";
+import { errorMessageForUser } from "@/lib/userFacingError";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function LoginPage() {
       router.replace("/dashboard");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid login");
+      setError(errorMessageForUser(err, "Sign-in did not complete. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -54,7 +55,7 @@ export default function LoginPage() {
     try {
       setInfo(await forgotPassword(emailTrim));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send reset link");
+      setError(errorMessageForUser(err, "Could not send reset instructions. Please try again."));
     } finally {
       setResetLoading(false);
     }

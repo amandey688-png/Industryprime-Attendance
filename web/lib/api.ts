@@ -2,6 +2,7 @@
 
 import { getStoredToken } from "@/lib/auth";
 import { API_BASE, effectiveApiBase } from "@/lib/envApi";
+import { userFacingApiDetail } from "@/lib/userFacingError";
 
 export { API_BASE };
 
@@ -65,13 +66,13 @@ export async function apiFetch<T = any>(
     const hint =
       " Check that FastAPI is running and `next.config.ts` rewrites `/api` → your API (or set NEXT_PUBLIC_API_URL to match this page’s origin). " +
       `Tried base: ${raw}. Try: cd backend && uvicorn main:app --reload`;
-    throw new Error(
-      (e instanceof Error ? e.message : "Failed to fetch") + "." + hint,
-    );
+    const base = e instanceof Error ? e.message : "Failed to fetch";
+    const full = process.env.NODE_ENV === "production" ? base : `${base}.${hint}`;
+    throw new Error(userFacingApiDetail(full));
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(formatBackendError(text) || res.statusText);
+    throw new Error(userFacingApiDetail(formatBackendError(text) || res.statusText));
   }
   return (await res.json()) as T;
 }
@@ -92,11 +93,13 @@ export async function apiFetchBlob(path: string, init?: RequestInit): Promise<Bl
     const hint =
       " Check that FastAPI is running and `next.config.ts` rewrites `/api` → your API (or set NEXT_PUBLIC_API_URL to match this page’s origin). " +
       `Tried base: ${raw}. Try: cd backend && uvicorn main:app --reload`;
-    throw new Error((e instanceof Error ? e.message : "Failed to fetch") + "." + hint);
+    const base = e instanceof Error ? e.message : "Failed to fetch";
+    const full = process.env.NODE_ENV === "production" ? base : `${base}.${hint}`;
+    throw new Error(userFacingApiDetail(full));
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(formatBackendError(text) || res.statusText);
+    throw new Error(userFacingApiDetail(formatBackendError(text) || res.statusText));
   }
   return res.blob();
 }
@@ -132,11 +135,13 @@ export async function publicApiFetch<T = unknown>(
     const hint =
       " Same-origin `/api` → FastAPI (see web/next.config.ts `rewrites`). " +
       "Start the backend (e.g. uvicorn on port 8000), set BACKEND_PROXY_TARGET if it is not 127.0.0.1:8000, then restart `npm run dev`.";
-    throw new Error((e instanceof Error ? e.message : "Failed to fetch") + "." + hint);
+    const base = e instanceof Error ? e.message : "Failed to fetch";
+    const full = process.env.NODE_ENV === "production" ? base : `${base}.${hint}`;
+    throw new Error(userFacingApiDetail(full));
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(formatBackendError(text) || res.statusText);
+    throw new Error(userFacingApiDetail(formatBackendError(text) || res.statusText));
   }
   const text = await res.text();
   if (!text) return undefined as T;

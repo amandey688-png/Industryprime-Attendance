@@ -1,6 +1,7 @@
 "use client";
 
 import { effectiveApiBase } from "@/lib/envApi";
+import { userFacingApiDetail } from "@/lib/userFacingError";
 
 export type Role = "master_admin" | "admin" | "user";
 
@@ -78,9 +79,11 @@ async function authRequest<T>(path: string, init: RequestInit): Promise<T> {
         cause !== null &&
         (cause as { name?: string }).name === "AbortError");
     throw new Error(
-      aborted
-        ? `Auth request timed out after ${AUTH_FETCH_TIMEOUT_MS / 1000}s (base ${base}). Is FastAPI running?`
-        : `Cannot reach FastAPI (base ${base}). Check NEXT_PUBLIC_API_URL / API proxy, backend status, and CORS.`,
+      userFacingApiDetail(
+        aborted
+          ? `Auth request timed out after ${AUTH_FETCH_TIMEOUT_MS / 1000}s (base ${base}). Is FastAPI running?`
+          : `Cannot reach FastAPI (base ${base}). Check NEXT_PUBLIC_API_URL / API proxy, backend status, and CORS.`,
+      ),
     );
   } finally {
     if (timeoutId && typeof window !== "undefined") window.clearTimeout(timeoutId);
@@ -115,16 +118,20 @@ async function authRequest<T>(path: string, init: RequestInit): Promise<T> {
     } else {
       msg = res.statusText || `HTTP ${res.status}`;
     }
-    throw new Error(msg || "Request failed");
+    throw new Error(userFacingApiDetail(msg || "Request failed"));
   }
 
   if (body === undefined) {
     const preview = trimmed.slice(0, 200);
     const htmlHint = trimmed.startsWith("<") ? " Received HTML, not JSON — the /api proxy may point at the wrong host." : "";
-    throw new Error(`Invalid JSON from server.${htmlHint} Preview: ${preview || "(empty)"}`);
+    throw new Error(
+      userFacingApiDetail(`Invalid JSON from server.${htmlHint} Preview: ${preview || "(empty)"}`),
+    );
   }
   if (body === null || typeof body !== "object") {
-    throw new Error(`Unexpected response body (${typeof body}). Check API proxy and /auth routes.`);
+    throw new Error(
+      userFacingApiDetail(`Unexpected response body (${typeof body}). Check API proxy and /auth routes.`),
+    );
   }
 
   return body as T;
@@ -178,7 +185,9 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   });
   if (!data?.access_token || !data?.user) {
     throw new Error(
-      "Login response was missing a token or user profile. Confirm /api proxies to your FastAPI app (see BACKEND_PROXY_TARGET / NEXT_PUBLIC_API_URL on Vercel).",
+      userFacingApiDetail(
+        "Login response was missing a token or user profile. Confirm /api proxies to your FastAPI app (see BACKEND_PROXY_TARGET / NEXT_PUBLIC_API_URL on Vercel).",
+      ),
     );
   }
   storeAuth(data.access_token, data.user);

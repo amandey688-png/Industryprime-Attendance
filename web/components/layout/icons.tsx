@@ -125,6 +125,23 @@ export function IconSearch({ className }: IconProps) {
   );
 }
 
+/** Three-line menu (hamburger). */
+export function IconMenu({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Svg>
+  );
+}
+
+export function IconX({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </Svg>
+  );
+}
+
 export function IconSun({ className }: IconProps) {
   return (
     <Svg className={className}>

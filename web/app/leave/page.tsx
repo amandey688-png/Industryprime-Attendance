@@ -274,7 +274,7 @@ export default function LeavePage() {
                 setMonth(Number(event.target.value));
                 setSelectedId(null);
               }}
-              className="mt-1 block w-44 rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100"
+              className="mt-1 block w-full min-w-0 rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none sm:w-44 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>
