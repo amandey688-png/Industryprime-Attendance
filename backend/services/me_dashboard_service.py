@@ -7,6 +7,14 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from database.supabase_client import SupabaseRest
 
+# Match attendance_management_service: IN at 9:31 or earlier is on time; 9:32+ is late.
+_LATE_CUTOFF_MINUTES = 9 * 60 + 31
+
+
+def _late_minutes_from_check_in(t_in: time) -> int:
+    delta = t_in.hour * 60 + t_in.minute - _LATE_CUTOFF_MINUTES
+    return 0 if delta <= 0 else int(delta)
+
 
 def _parse_time(val: Any) -> Optional[time]:
     if val is None:
@@ -78,6 +86,71 @@ def _holiday_dates_between(supabase: SupabaseRest, start: date, end: date) -> Se
         except ValueError:
             continue
     return out
+
+
+def _approved_leave_dates(
+    supabase: SupabaseRest,
+    employee_id: str,
+    start: date,
+    end: date,
+) -> Set[date]:
+    """Calendar dates covered by approved leave in [start, end]."""
+    out: Set[date] = set()
+    try:
+        rows = supabase.select(
+            table="leave_requests",
+            select="leave_date_start,leave_date_end,status",
+            where_eq={"employee_id": employee_id},
+            limit=500,
+        )
+    except Exception:
+        return out
+    for r in rows or []:
+        if str(r.get("status") or "").lower() != "approved":
+            continue
+        try:
+            sd = date.fromisoformat(str(r.get("leave_date_start"))[:10])
+            ed = date.fromisoformat(str(r.get("leave_date_end") or r.get("leave_date_start"))[:10])
+        except ValueError:
+            continue
+        cur = max(sd, start)
+        last = min(ed, end)
+        while cur <= last:
+            out.add(cur)
+            cur += timedelta(days=1)
+    return out
+
+
+def _count_late_arrivals(
+    rows: List[Dict[str, Any]],
+    *,
+    holiday_dates: Set[date],
+    leave_dates: Set[date],
+) -> int:
+    """
+    Count working days with a real check-in after the 9:31 cutoff.
+    Ignores stale `late_minutes` on absent/weekend/holiday/leave days.
+    """
+    n = 0
+    for r in rows:
+        try:
+            dd = date.fromisoformat(str(r.get("date"))[:10])
+        except ValueError:
+            continue
+        if dd.weekday() >= 5 or dd in holiday_dates or dd in leave_dates:
+            continue
+        cin = r.get("check_in")
+        if cin is None or not str(cin).strip():
+            continue
+        st = str(r.get("final_status") or r.get("status") or "").lower()
+        if st in {"absent", "leave", "holiday", "off", "weekend", "not_started"}:
+            continue
+        t_in = _parse_time(cin)
+        if not t_in:
+            continue
+        if _late_minutes_from_check_in(t_in) > 0:
+            n += 1
+    return n
 
 
 def _attendance_for_range(
@@ -212,12 +285,12 @@ def get_me_dashboard(*, supabase: SupabaseRest, auth_email: str, today: Optional
 
     hol_m = _holiday_dates_between(supabase, month_start, month_end)
     hol_7 = _holiday_dates_between(supabase, d - timedelta(days=6), d)
+    leave_m = _approved_leave_dates(supabase, emp_id, month_start, month_end)
 
     att_month = _attendance_for_range(supabase, emp_id, month_start, month_end)
     att_7 = _attendance_for_range(supabase, emp_id, d - timedelta(days=6), d)
 
     present_dates_m: Set[date] = set()
-    late_month = 0
     hours_month: List[float] = []
     for r in att_month:
         try:
@@ -226,14 +299,14 @@ def get_me_dashboard(*, supabase: SupabaseRest, auth_email: str, today: Optional
             continue
         if r.get("check_in") is not None and str(r.get("check_in")).strip():
             present_dates_m.add(dd)
-        if int(r.get("late_minutes") or 0) > 0:
-            late_month += 1
         wh = r.get("working_hours")
         if wh is not None:
             try:
                 hours_month.append(float(wh))
             except (TypeError, ValueError):
                 pass
+
+    late_month = _count_late_arrivals(att_month, holiday_dates=hol_m, leave_dates=leave_m)
 
     expected_working = _weekday_working_days(month_start, month_end, hol_m)
     present_current = len(present_dates_m)
@@ -243,7 +316,8 @@ def get_me_dashboard(*, supabase: SupabaseRest, auth_email: str, today: Optional
     prev_month_start = date(prev_first.year, prev_first.month, 1)
     prev_att = _attendance_for_range(supabase, emp_id, prev_month_start, prev_month_end)
     hol_prev = _holiday_dates_between(supabase, prev_month_start, prev_month_end)
-    late_prev = sum(1 for r in prev_att if int(r.get("late_minutes") or 0) > 0)
+    leave_prev = _approved_leave_dates(supabase, emp_id, prev_month_start, prev_month_end)
+    late_prev = _count_late_arrivals(prev_att, holiday_dates=hol_prev, leave_dates=leave_prev)
 
     allocated, used_leave, breakdown = _leave_balance_breakdown(supabase, emp_id, d.year)
     avg_hours = sum(hours_month) / len(hours_month) if hours_month else 0.0
@@ -262,7 +336,8 @@ def get_me_dashboard(*, supabase: SupabaseRest, auth_email: str, today: Optional
     loc = str(emp.get("department") or "").strip() or "HQ"
     shift_name = str(emp.get("designation") or "").strip() or "General shift"
 
-    last7 = _build_last_7_days(d, att_7, hol_7)
+    leave_7 = _approved_leave_dates(supabase, emp_id, d - timedelta(days=6), d)
+    last7 = _build_last_7_days(d, att_7, hol_7, leave_7)
 
     upcoming_h = _next_holiday(supabase, d)
     upcoming_l = _next_leave(supabase, emp_id, d)
@@ -313,7 +388,7 @@ def _empty_dashboard(d: date) -> Dict[str, Any]:
             "leaveBalance": {"total": 0, "used": 0, "breakdown": "—"},
             "avgHoursPerDay": {"value": 0, "deltaVsTarget": 0},
         },
-        "last7Days": _build_last_7_days(d, [], set()),
+        "last7Days": _build_last_7_days(d, [], set(), set()),
         "upcoming": {"nextHoliday": None, "nextLeave": None},
     }
 
@@ -322,6 +397,7 @@ def _build_last_7_days(
     today: date,
     rows: List[Dict[str, Any]],
     holidays: Set[date],
+    leave_dates: Set[date],
 ) -> List[Dict[str, Any]]:
     by_date = {str(r.get("date"))[:10]: r for r in rows}
     out: List[Dict[str, Any]] = []
@@ -331,6 +407,7 @@ def _build_last_7_days(
         dow = dd.weekday()
         weekend = dow >= 5
         hol = dd in holidays
+        on_leave = dd in leave_dates
         r = by_date.get(key)
         check_in = None
         check_out = None
@@ -339,6 +416,8 @@ def _build_last_7_days(
         if weekend:
             status = "weekend"
         elif hol:
+            status = "off"
+        elif on_leave:
             status = "off"
         elif r:
             tin = _parse_time(r.get("check_in"))
@@ -353,10 +432,13 @@ def _build_last_7_days(
                     hours = float(wh)
                 except (TypeError, ValueError):
                     hours = 0.0
-            if int(r.get("late_minutes") or 0) > 0:
+            if tin and _late_minutes_from_check_in(tin) > 0:
                 status = "late"
-            else:
+            elif tin:
                 status = "present"
+            else:
+                st = str(r.get("final_status") or r.get("status") or "").lower()
+                status = "absent" if st == "absent" else "off"
         out.append(
             {
                 "date": key,
