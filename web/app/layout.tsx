@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import AppShell from "@/components/layout/AppShell";
 import { AppProviders } from "@/components/providers/AppProviders";
 import "./globals.css";
@@ -55,25 +54,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <Script
-          id="theme-init"
-          strategy="beforeInteractive"
+        {/* Native script — next/script must not be placed inside <head> in App Router (React 19). */}
+        <script
           dangerouslySetInnerHTML={{
-            __html: `
-              (function () {
-                try {
-                  var saved = window.localStorage.getItem('theme');
-                  if (saved !== 'light' && saved !== 'dark') {
-                    saved =
-                      window.matchMedia &&
-                      window.matchMedia('(prefers-color-scheme: dark)').matches
-                        ? 'dark'
-                        : 'light';
-                  }
-                  document.documentElement.classList.toggle('dark', saved === 'dark');
-                } catch (e) {}
-              })();
-            `,
+            __html: `(function(){try{var s=localStorage.getItem('theme');if(s!=='light'&&s!=='dark'){s=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.classList.toggle('dark',s==='dark');}catch(e){}})();`,
           }}
         />
       </head>

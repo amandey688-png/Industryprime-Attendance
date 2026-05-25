@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   decideLeave,
+  getApprovedLeaves,
   getAudit,
   getDepartments,
   getKpis,
@@ -22,6 +23,8 @@ export const adminDashboardKeys = {
   departments: () => [...adminDashboardKeys.all, "departments"] as const,
   late: (f: string | null) => [...adminDashboardKeys.all, "late", f ?? "all"] as const,
   leaves: () => [...adminDashboardKeys.all, "leaves"] as const,
+  approvedLeaves: (year: number, month: number) =>
+    [...adminDashboardKeys.all, "approved-leaves", year, month] as const,
   audit: (limit: number) => [...adminDashboardKeys.all, "audit", limit] as const,
 };
 
@@ -67,6 +70,14 @@ export function usePendingLeaves() {
   return useQuery({
     queryKey: adminDashboardKeys.leaves(),
     queryFn: getPendingLeaves,
+    ...dashboardQueryDefaults,
+  });
+}
+
+export function useApprovedLeaves(year: number, month: number) {
+  return useQuery({
+    queryKey: adminDashboardKeys.approvedLeaves(year, month),
+    queryFn: () => getApprovedLeaves(year, month),
     ...dashboardQueryDefaults,
   });
 }
