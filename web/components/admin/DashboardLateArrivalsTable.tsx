@@ -21,14 +21,8 @@ import { formatLateMinutes } from "@/lib/admin/formatLate";
 import type { LateArrival } from "@/lib/admin/dashboardMockStore";
 import { useKpis, useLateArrivals, useNotifyLateMutation, useNotifyManyMutation } from "@/lib/hooks/useAdminDashboard";
 
-export function DashboardLateArrivalsTable({
-  deptFilter,
-  onClearDeptFilter,
-}: {
-  deptFilter: string | null;
-  onClearDeptFilter: () => void;
-}) {
-  const lateQ = useLateArrivals(deptFilter);
+export function DashboardLateArrivalsTable() {
+  const lateQ = useLateArrivals(null);
   const kpisQ = useKpis();
   const notifyOne = useNotifyLateMutation();
   const notifyMany = useNotifyManyMutation();
@@ -181,21 +175,7 @@ export function DashboardLateArrivalsTable({
   return (
     <Card className="min-w-0 w-full lg:col-span-7">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className="mb-0">Late arrivals · today</CardTitle>
-          {deptFilter ? (
-            <span className="rounded-full bg-[#F7FAF9] px-2 py-0.5 text-[11px] font-semibold text-[#0F1F1B]">
-              Filtered: {deptFilter} ·{" "}
-              <button
-                type="button"
-                className="text-emerald-600 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                onClick={onClearDeptFilter}
-              >
-                Clear
-              </button>
-            </span>
-          ) : null}
-        </div>
+        <CardTitle className="mb-0">Late arrivals · today</CardTitle>
         {totalLate > 0 ? (
           <Link href="/attendance" className="text-xs font-semibold text-emerald-600 hover:underline">
             See all {totalLate} →

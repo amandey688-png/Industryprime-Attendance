@@ -45,6 +45,7 @@ export type {
 export {
   buildTrend,
   decideLeave,
+  getApprovedLeaves,
   getAudit,
   getDepartments,
   getKpis,
@@ -55,3 +56,5 @@ export {
   notifyEmployees,
   restoreLastLeave,
 } from "@/lib/admin/dashboardMockStore";
+
+export type { ApprovedLeaveRow } from "@/lib/admin/dashboardMockStore";

@@ -52,16 +52,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(() =>
-    typeof window === "undefined" ? null : getStoredUser(),
-  );
-  /** Block shell only when there is a token but no cached profile yet. */
-  const [loadingSession, setLoadingSession] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const token = getStoredToken();
-    if (!token) return false;
-    return !getStoredUser();
-  });
+  /** Start null on server and client so first paint matches (avoids hydration mismatch). */
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
   const prevPathRef = useRef<string | null>(null);
 
   const isPublicRoute = useMemo(
@@ -74,9 +67,27 @@ export default function AppShell({ children }: { children: ReactNode }) {
     [pathname],
   );
 
-  useEffect(() => {
+  /** Hydrate session from storage before paint (same initial state as server on first render). */
+  useLayoutEffect(() => {
     if (isPublicRoute) {
       setLoadingSession(false);
+      return;
+    }
+    const token = getStoredToken();
+    if (!token) {
+      setUser(null);
+      setLoadingSession(false);
+      return;
+    }
+    const cached = getStoredUser();
+    if (cached) {
+      setUser(cached);
+      setLoadingSession(false);
+    }
+  }, [isPublicRoute]);
+
+  useEffect(() => {
+    if (isPublicRoute) {
       return;
     }
 

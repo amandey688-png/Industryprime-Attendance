@@ -2,42 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { AdminSidebar } from "@/components/admin/Sidebar";
+import { DashboardApproveLeaveCard } from "@/components/admin/DashboardApproveLeaveCard";
 import { DashboardAuditLog } from "@/components/admin/DashboardAuditLog";
-import { DashboardDepartmentSection } from "@/components/admin/DashboardDepartmentSection";
 import { KpiStrip } from "@/components/admin/KpiStrip";
-import { Skeleton } from "@/components/ui/dashboard-ui";
-
-const DashboardTrendChart = dynamic(
-  () => import("@/components/admin/DashboardTrendChart").then((m) => ({ default: m.DashboardTrendChart })),
-  { loading: () => <SectionSkeleton tall />, ssr: false },
-);
-
-const DashboardLateArrivalsTable = dynamic(
-  () =>
-    import("@/components/admin/DashboardLateArrivalsTable").then((m) => ({
-      default: m.DashboardLateArrivalsTable,
-    })),
-  { loading: () => <SectionSkeleton />, ssr: false },
-);
-
-const DashboardPendingLeaves = dynamic(
-  () => import("@/components/admin/DashboardPendingLeaves").then((m) => ({ default: m.DashboardPendingLeaves })),
-  { loading: () => <SectionSkeleton />, ssr: false },
-);
-
-function SectionSkeleton({ tall }: { tall?: boolean }) {
-  return (
-    <div className="rounded-2xl border border-[#E5EAE8] bg-white p-6 shadow-sm lg:col-span-7">
-      <Skeleton className="h-4 w-40" />
-      <Skeleton className={tall ? "mt-6 h-64 w-full" : "mt-6 h-48 w-full"} />
-    </div>
-  );
-}
-import { ManagementCards } from "@/components/admin/ManagementCards";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { Skeleton } from "@/components/ui/dashboard-ui";
 import { useDashboardAdminNav } from "@/components/dashboard/DashboardAdminNavContext";
 import { canShowAddAttendanceHeader } from "@/lib/navAccess";
 import { can } from "@/lib/permissions";
@@ -45,6 +17,22 @@ import { usePendingLeaves } from "@/lib/hooks/useAdminDashboard";
 import { useSession } from "@/lib/hooks/useSession";
 import type { AuthUser } from "@/lib/auth";
 import { getStoredUser } from "@/lib/auth";
+
+const DashboardLateArrivalsTable = dynamic(
+  () =>
+    import("@/components/admin/DashboardLateArrivalsTable").then((m) => ({
+      default: m.DashboardLateArrivalsTable,
+    })),
+  {
+    loading: () => (
+      <div className="rounded-2xl border border-[#E5EAE8] bg-white p-6 shadow-sm lg:col-span-7">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="mt-6 h-48 w-full" />
+      </div>
+    ),
+    ssr: false,
+  },
+);
 
 const roleLabels: Record<AuthUser["role"], string> = {
   master_admin: "Master Admin",
@@ -55,8 +43,6 @@ const roleLabels: Record<AuthUser["role"], string> = {
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useSession();
-  const [deptFilter, setDeptFilter] = useState<string | null>(null);
-  const [trendRange, setTrendRange] = useState<"14d" | "30d">("14d");
   const dashNav = useDashboardAdminNav();
 
   const pendingQ = usePendingLeaves();
@@ -80,8 +66,6 @@ export default function DashboardPage() {
   if (displayUser.role === "user") {
     return null;
   }
-
-  const isMaster = displayUser.role === "master_admin";
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] w-full min-w-0 overflow-x-hidden bg-[#F7FAF9] pb-36 text-[#0F1F1B] md:pb-28">
@@ -126,18 +110,9 @@ export default function DashboardPage() {
         <KpiStrip />
 
         <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
-          <DashboardTrendChart range={trendRange} onRange={setTrendRange} />
-          <DashboardDepartmentSection selectedDept={deptFilter} onSelectDept={setDeptFilter} />
+          <DashboardLateArrivalsTable />
+          <DashboardApproveLeaveCard />
         </div>
-
-        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
-          <DashboardLateArrivalsTable deptFilter={deptFilter} onClearDeptFilter={() => setDeptFilter(null)} />
-          <DashboardPendingLeaves role={displayUser.role} />
-        </div>
-
-        <section className="min-w-0 scroll-mt-6 space-y-3">
-          <ManagementCards isMasterAdmin={isMaster} />
-        </section>
 
         {can.seeAuditLog(displayUser.role) ? (
           <section className="min-w-0 scroll-mt-6">

@@ -240,6 +240,30 @@ export async function getDepartments(): Promise<DeptSlice[]> {
   }
 }
 
+export type ApprovedLeaveRow = {
+  id: string;
+  employee_name?: string | null;
+  employee_code?: string | null;
+  leave_type?: string | null;
+  leave_date_start?: string | null;
+  leave_date_end?: string | null;
+  days?: number;
+  approved_at?: string | null;
+  decided_by_email?: string | null;
+  approved_by?: string | null;
+  remarks?: string | null;
+};
+
+export async function getApprovedLeaves(year: number, month: number): Promise<ApprovedLeaveRow[]> {
+  const params = new URLSearchParams({
+    status: "approved",
+    year: String(year),
+    month: String(month),
+  });
+  const data = await apiFetch<ApprovedLeaveRow[]>(`/leave/requests?${params.toString()}`);
+  return Array.isArray(data) ? data : [];
+}
+
 export async function getLateArrivals(filter?: string | null): Promise<LateArrival[]> {
   try {
     const sp = new URLSearchParams();
