@@ -67,24 +67,44 @@ export default function AppShell({ children }: { children: ReactNode }) {
     [pathname],
   );
 
-  /** Hydrate session from storage before paint (same initial state as server on first render). */
+  /** Hydrate session from storage before paint (server and client both start with user=null). */
   useLayoutEffect(() => {
-    if (isPublicRoute) {
-      setLoadingSession(false);
-      return;
-    }
     const token = getStoredToken();
+    const cached = getStoredUser();
     if (!token) {
       setUser(null);
       setLoadingSession(false);
       return;
     }
-    const cached = getStoredUser();
     if (cached) {
       setUser(cached);
       setLoadingSession(false);
+      return;
     }
-  }, [isPublicRoute]);
+    if (isPublicRoute) {
+      setLoadingSession(false);
+      return;
+    }
+    setLoadingSession(true);
+  }, [isPublicRoute, pathname]);
+
+  /** Login/signup: verifySession is skipped on public routes — still react to storeAuth(). */
+  useEffect(() => {
+    if (!redirectIfAuthedPublic) return;
+    const onAuthChange = () => {
+      const token = getStoredToken();
+      const cached = getStoredUser();
+      if (token && cached) {
+        setUser(cached);
+        setLoadingSession(false);
+      } else if (!token) {
+        setUser(null);
+        setLoadingSession(false);
+      }
+    };
+    window.addEventListener("industryprime-auth-change", onAuthChange);
+    return () => window.removeEventListener("industryprime-auth-change", onAuthChange);
+  }, [redirectIfAuthedPublic]);
 
   useEffect(() => {
     if (isPublicRoute) {
@@ -123,7 +143,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
     }
 
     void verifySession();
-    const onAuthChange = () => void verifySession();
+    const onAuthChange = () => {
+      const token = getStoredToken();
+      const cached = getStoredUser();
+      if (token && cached) {
+        setUser(cached);
+        setLoadingSession(false);
+      } else if (!token) {
+        setUser(null);
+        setLoadingSession(false);
+      }
+      void verifySession();
+    };
     window.addEventListener("industryprime-auth-change", onAuthChange);
     return () => {
       mounted = false;

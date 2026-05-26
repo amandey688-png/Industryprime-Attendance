@@ -31,9 +31,11 @@ async def lifespan(app: FastAPI):
     PDF_UPLOAD_TMP.mkdir(parents=True, exist_ok=True)
     cleanup_stale_pdf_tempfiles(str(PDF_UPLOAD_TMP))
 
+    from middleware.rate_limit import log_rate_limit_status
     from services.email_service import log_email_smtp_startup
 
     log_email_smtp_startup()
+    log_rate_limit_status()
 
     async def hourly_tmp_cleanup():
         while True:
