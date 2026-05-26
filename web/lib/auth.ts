@@ -51,7 +51,9 @@ function readCookieRaw(name: string): string | null {
 }
 
 function setCookie(name: string, value: string, maxAgeSeconds: number) {
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; samesite=lax`;
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:" ? "; secure" : "";
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; samesite=lax${secure}`;
 }
 
 function clearCookie(name: string) {
@@ -144,6 +146,11 @@ async function authRequest<T>(path: string, init: RequestInit): Promise<T> {
       msg = detail.map((x: { msg?: string }) => x?.msg || JSON.stringify(x)).join("; ");
     } else if (rec?.message) {
       msg = String(rec.message);
+    } else if (res.status === 429) {
+      msg =
+        typeof detail === "string" && detail
+          ? detail
+          : "Too many attempts. Please wait a minute and try again.";
     } else if (res.status === 502 || res.status === 503 || res.status === 504) {
       msg =
         "Cannot reach the API server (bad gateway). On Vercel, set BACKEND_PROXY_TARGET or NEXT_PUBLIC_API_URL to your live FastAPI base URL, then redeploy.";
